@@ -14,14 +14,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/p-jack/el.git"
+    "url": "git+https://github.com/p-jack/loudo-check.git"
   },
   "author": "Paul Jack",
   "license": "BSD",
   "bugs": {
-    "url": "https://github.com/p-jack/el/issues"
+    "url": "https://github.com/p-jack/loudo-check/issues"
   },
-  "homepage": "https://github.com/p-jack/el#readme",
+  "homepage": "https://github.com/p-jack/loudo-check#readme",
   "devDependencies": {
     "@testing-library/jest-dom": "^6.4.1",
     "@types/jest": "^29.5.12",

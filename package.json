@@ -1,7 +1,7 @@
 {
-  "name": "@pjack/el",
-  "version": "1.0.2",
-  "description": "Quickly create DOM trees from scripts.",
+  "name": "loudo-check",
+  "version": "1.0.0",
+  "description": "Add type/value safety checks to objects.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

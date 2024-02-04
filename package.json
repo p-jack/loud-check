@@ -1,0 +1,35 @@
+{
+  "name": "@pjack/el",
+  "version": "1.0.2",
+  "description": "Quickly create DOM trees from scripts.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "jest --coverage"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/p-jack/el.git"
+  },
+  "author": "Paul Jack",
+  "license": "BSD",
+  "bugs": {
+    "url": "https://github.com/p-jack/el/issues"
+  },
+  "homepage": "https://github.com/p-jack/el#readme",
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.4.1",
+    "@types/jest": "^29.5.12",
+    "@types/web": "^0.0.138",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3"
+  }
+}

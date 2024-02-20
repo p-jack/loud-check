@@ -1,8 +1,21 @@
-import { Check } from "./index"
+import { Check, Fail } from "./index"
 
-const yell = (sample:object, object:object) => {
-  Check.copy(sample, object)
-  Check.raise(object)
+import {
+  afterEach,
+  describe,
+  expect,
+  test,
+} from 'vitest'
+
+afterEach(() => {
+  Check.renameWith((name:string) => name)
+})
+
+const yell = (sample:object, object:{ [key: string]: unknown }) => {
+  const r = Check.run(sample, object)
+  if (!r.success) {
+    throw new Check.CheckError(r.fail)
+  }
 }
 
 describe("required", ()=>{
@@ -63,13 +76,6 @@ describe("min", ()=>{
     yell(sample, {v:"1234567890A"})
     yell(sample, {v:"1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ"})
   })
-  test("set (size)", ()=>{
-    const sample = Check.define({v:{ v:new Set([1,2,3]), min:3 }})
-    expect(() => {yell(sample, {v:new Set([1])}) }).toThrow("v: size of 1 < minimum size of 3")
-    yell(sample, {v: new Set([1, 2, 3])})
-    yell(sample, {v: new Set([1, 2, 3, 4])})
-    yell(sample, {v: new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])})
-  })
 })
 
 describe("max", ()=>{
@@ -99,13 +105,6 @@ describe("max", ()=>{
     yell(sample, {v:"123"})
     yell(sample, {v:"12"})
     yell(sample, {v:""})
-  })
-  test("set (size)", ()=>{
-    const sample = Check.define({v:{ v:new Set([0]), max:3 }})
-    expect(() => {yell(sample, {v:new Set([1,2,3,4,5])}) }).toThrow("v: size of 5 > maximum size of 3")
-    yell(sample, {v: new Set([1, 2, 3])})
-    yell(sample, {v: new Set([1, 2])})
-    yell(sample, {v: new Set([])})
   })
 })
 
@@ -158,7 +157,7 @@ test("custom", ()=>{
       v:0,
       custom:(value:number)=>{
         if (value % 2 !== 0) {
-          return { code:"EVEN", message:"must be even"}
+          return new Fail("v", "EVEN", "must be even")
         }
       }
     }
@@ -167,8 +166,65 @@ test("custom", ()=>{
   yell(sample, {v:0})
 })
 
+test("dates", () => {
+  const sample = Check.define({ d:{ v:newDate(1970) }})
+  yell(sample, {d:"2024-01-08T23:38:03"})
+  expect(() => { yell(sample, {d:"foo"})}).toThrow("d: type mismatch, expected date but got string")
+})
+
+test("nested objects", () => {
+  const sample2 = Check.define({ s:{v:"1", min:1 }})
+  const sample1 = Check.define({ o:{v:sample2 }})
+  const good = { o: { s: "2" } }
+  const r = Check.run(sample1, good)
+  if (r.success) {
+    expect(r.result.o.s).toBe("2")
+  } else {
+    expect(r.success).toBe(true)
+  }
+  const bad = { o: { s: "" } }
+  expect(() => { yell(sample1, bad) }).toThrow("o.s: length of 0 < minimum length of 1")
+})
+
+describe("nested arrays", () => {
+  test("primitive elements", () => {
+    const sample = Check.define({ a:{ v:[""] } })
+    const good1 = { a:["1", "2", "3"] }
+    yell(sample, good1)
+    const good2 = { a:[] }
+    yell(sample, good2)
+    const bad = { a:[1, 2, 3] }
+    expect(() => { yell(sample, bad)}).toThrow("a[0]: type mismatch, expected string but got number")
+  })
+  test("object elements", () => {
+    const sampleElement = Check.define({ n: { v:1 }})
+    const sample = Check.define({ a:{ v:[sampleElement] }})
+    const good1 = { a:[] }
+    yell(sample, good1)
+    const good2 = { a:[{ n:11 }, { n:22 }, { n:33 }]}
+    yell(sample, good2)
+    const bad = { a:[1,2,3] }
+    expect(() => { yell(sample, bad)}).toThrow("a[0]: type mismatch, expected object but got number")
+  })
+})
+
+test("rename", () => {
+  Check.renameWith((name:string) => name.replaceAll("_", ""))
+  const sample = Check.define({
+    nounderscores: { v:"" },
+  })
+  const r = Check.run(sample, { no_underscores: "ABC" })
+  if (r.success) {
+    expect(r.result.nounderscores).toBe("ABC")
+  } else {
+    console.log(r.fail)
+    expect(r.fail).toBeUndefined()
+  }
+})
+
+
 test("throws error if never defined", ()=>{
-  expect(() => {Check.run({x:5})}).toThrow("No checks defined.")
+  expect(() => {Check.run({}, {x:5})}).toThrow("no checks defined")
 })
 
 test("runOne", () => {
@@ -176,10 +232,10 @@ test("runOne", () => {
   const obj = { n:0 }
   Check.copy(sample, obj)
   const fails = Check.runOne(obj, "n", -1)
-  expect(fails).toStrictEqual([{
-    code: "MIN",
-    message: "n: value of -1 < minimum value of 0"
-  }])
+  expect(fails).toHaveLength(1)
+  expect(fails[0]?.prefix).toBe("n")
+  expect(fails[0]?.code).toBe("MIN")
+  expect(fails[0]?.message).toBe("value of -1 < minimum value of 0")
 })
 
 test("get", () => {

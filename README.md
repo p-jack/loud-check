@@ -5,28 +5,23 @@
 ```typescript
 import { Check } from "loudo-check"
 
-const user0 = Check.define({
+const userSchema = Check.define({
   id: { v:"A18C978A-7A2C-4EA4-BBFF-75C1EF30FCC3", min:36, max:36 },
   email:{ v:"fake@example.com", regex:/[a-z0-9]+@[a-z]+\.[a-z]{2,3}/ },
   name:{ v:"Reba", min:1, max:100 }
 })
 
-type User = typeof user0
+type User = typeof userSchema
 
-const user:User = {
-  id: "1234",
-  email: "fake@example.com",
-  name: "Flugelhorn"
+const inputJSON = `
+{
+  "id":"1234",
+  "email":"fake@example.com",
+  "name":"Flugelhorn"
 }
+`
 
-Check.copy(user0, user)
-const fails = Check.run(user)
-console.log(fails)
-// id: length of 4 < minimum length of 36
-
-Check.raise(user)
-// raises a CheckError with above message
-
+const user = Check.parse(userSchema, inputJSON)
 ```
 
 ## Defining Checks
@@ -39,9 +34,11 @@ and the checks for that property.
 
 * The `v` field is a sample value for the property that should pass
   all of its checks. The `v` field is mandatory; every other 
-  field 
+  field is optional.
 * The `required` field determines whether the property is required.
-  If unspecified, it defaults to true.
+  If unspecified, it defaults to true. You can also use the special
+  string value `"default"`; in that case, if the property is missing,
+  the sample value (defined via `v`) will be used instead.
 * The `min` field is either the minimum value for the property
   (for numbers, Dates, and BigInts) or the minimum length/size of
   an array, arraylike, string, Set, or anything else that has a
@@ -61,7 +58,8 @@ and the checks for that property.
 
 `Check.define` results in an object that consists of all the 
 defined properties, with their values initialized to the `v` 
-fields of those properties. That is a *sample object*, and can
-be used to copy the schema to other conforming objects (via
-`Check.copy`.)
-
+fields of those properties. That is a *sample object*. You can
+pass the sample to `Check.parse` to parse a JSON string, raising
+an error if the object in the JSON does not pass the checks defined
+in the sample. You can also use `Check.run` to test an object
+against the schema, retrieving any failures without raising an error.

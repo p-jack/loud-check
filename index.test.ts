@@ -11,16 +11,17 @@ afterEach(() => {
   Check.renameWith((name:string) => name)
 })
 
-const yell = (sample:object, object:{ [key: string]: unknown }) => {
+const yell = <T extends object>(sample:T, object:{ [key: string]: unknown }):T => {
   const r = Check.run(sample, object)
   if (!r.success) {
     throw new Check.CheckError(r.fail)
   }
+  return r.result
 }
 
 describe("required", ()=>{
   interface I { p?:string }
-  test("is the default", ()=>{
+  test("yes is the default", ()=>{
     const sample = Check.define({p:{v:""}})
     expect(() => {yell(sample, {}) }).toThrow("p: missing required property")
     yell(sample, {p:""})
@@ -31,13 +32,19 @@ describe("required", ()=>{
     yell(sample, {p:""})
   })
   test("not required", ()=>{
-    const sample = Check.define({p:{v:"" as string|undefined, required:false}})
+    const sample = Check.define({p:{v:"", required:false}})
     yell(sample, {p:""})
     yell(sample, {})
   })
+  test("default value", ()=>{
+    const sample = Check.define({p:{v:"xyzzy", required:"default"}})
+    const result = yell(sample, {})
+    expect(result.p).toBe("xyzzy")
+    yell(sample, {p:""})
+  })
   test("non-required fields are still validated if present", ()=>{
     const sample = Check.define({
-      p:{v:0 as number|undefined, required:false, min:0}
+      p:{v:0, required:false, min:0}
     })
     expect(() => {yell(sample, {p:-1})}).toThrow("p: value of -1 < minimum value of 0")
   })
@@ -115,6 +122,11 @@ describe("allowed", ()=>{
     yell(sample, {v:"a"})
     yell(sample, {v:"b"})
     yell(sample, {v:"c"})
+  })
+  test("fallback", () => {
+    const sample = Check.define({v:{ v:"a", allowed:["a","b","c"], fallback:"a"}})
+    const r = yell(sample, {v:"x"})
+    expect(r.v).toBe("a")
   })
 })
 
@@ -197,14 +209,16 @@ describe("nested arrays", () => {
     expect(() => { yell(sample, bad)}).toThrow("a[0]: type mismatch, expected string but got number")
   })
   test("object elements", () => {
-    const sampleElement = Check.define({ n: { v:1 }})
+    const sampleElement = Check.define({ n: { v:1, min:1 }})
     const sample = Check.define({ a:{ v:[sampleElement] }})
     const good1 = { a:[] }
     yell(sample, good1)
     const good2 = { a:[{ n:11 }, { n:22 }, { n:33 }]}
     yell(sample, good2)
-    const bad = { a:[1,2,3] }
-    expect(() => { yell(sample, bad)}).toThrow("a[0]: type mismatch, expected object but got number")
+    const bad1 = { a:[1,2,3] }
+    expect(() => { yell(sample, bad1)}).toThrow("a[0]: type mismatch, expected object but got number")
+    const bad2 = { a:[{ n:0 }]}
+    expect(() => { yell(sample, bad2)}).toThrow("a[0].n: value of 0 < minimum value of 1")
   })
 })
 
@@ -222,28 +236,30 @@ test("rename", () => {
   }
 })
 
+test("custom name", () => {
+  const sample = Check.define({s:{v:"", name:"S"}})
+  const r = Check.parse(sample, '{"S":"123"}')
+  expect(r.s).toBe("123")
+})
+
 
 test("throws error if never defined", ()=>{
-  expect(() => {Check.run({}, {x:5})}).toThrow("no checks defined")
+  expect(() => {Check.run({}, {x:5})}).toThrow("Invalid schema object. Schemas must be defined via Check.define")
 })
 
 test("runOne", () => {
   const sample = Check.define({ n:{ v:10, min:0 }})
   const obj = { n:0 }
-  Check.copy(sample, obj)
-  const fails = Check.runOne(obj, "n", -1)
+  const fails = Check.runOne(sample, obj, "n", -1)
   expect(fails).toHaveLength(1)
   expect(fails[0]?.prefix).toBe("n")
   expect(fails[0]?.code).toBe("MIN")
   expect(fails[0]?.message).toBe("value of -1 < minimum value of 0")
 })
 
-test("get", () => {
-  const sample = Check.define({ n:{ v:10, min:0 }})
-  const obj = { n:0 }
-  Check.copy(sample, obj)
-  const schema = Check.get(obj)
-  expect(schema).toBeDefined()
-  expect(schema!.n.v).toBe(10)
-  expect(schema!.n.min).toBe(0)  
+test("parse", () => {
+  const sample = Check.define({p:{v:""}})
+  const r = Check.parse(sample, '{"p":"s"}')
+  expect(r.p).toBe("s")
+  expect(()=>{ Check.parse(sample, '{"p":0}')}).toThrow("p: type mismatch, expected string but got number")
 })

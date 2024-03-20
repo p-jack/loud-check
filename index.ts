@@ -45,10 +45,12 @@ T extends Length ? number :
 T extends Date ? Date :
 undefined
 
+type Required = true | false | "default" 
+
 export interface Property<T> {
   v:T
   name?:string
-  required?:boolean
+  required?:Required
   min?:Limit<T>
   max?:Limit<T>
   allowed?:T[]
@@ -60,7 +62,8 @@ export interface Property<T> {
 
 interface Optimized<T> {
   name:string
-  required:boolean
+  v:T
+  required:Required
   passes:Checker<T>[]
 }
 
@@ -158,14 +161,14 @@ const optimize = <T>(name:string, sample:T, p:Property<T>):Optimized<T> => {
   if (c = regexChecker(name, p.regex)) passes.push(c)
   if (c = integerChecker(name, sample, p.integer)) passes.push(c)
   if (c = p.custom) passes.push(c)
-  return { name, required, passes }
+  return { name, v:sample, required, passes }
 }
 
 const toFunction = <T>(name:string, sample:T, p:Property<T>):(value:T)=>Fail[] => {
   const opt = optimize(name, sample, p)
   const passes = opt.passes
   passes.forEach(x => x(sample))
-  if (opt.required) {
+  if (opt.required !== false) {
     return (value:T) => {
       return passes.map(f => f(value)).filter(x => x !== undefined) as never
     }
@@ -180,7 +183,15 @@ const toFunction = <T>(name:string, sample:T, p:Property<T>):(value:T)=>Fail[] =
 
 }
 
-export const define = <T extends Record<string,Property<any>>>(schema:T):{[P in keyof T]:T[P]["v"]} => {
+type Has<T extends Record<string,Property<any>>,P extends keyof T> = 
+    T[P]["required"] extends false ? "N" : 
+    T[P]["required"] extends "default" ? "N" :
+    "Y" 
+
+export const define = <T extends Record<string,Property<any>>>(schema:T):
+  ( { [P in keyof T as Has<T,P> extends "Y" ? P : never]:  T[P]["v"] }
+  & { [P in keyof T as Has<T,P> extends "N"  ? P : never]?: T[P]["v"] }  
+) => {
   const result:any = {}
   const full:any = {}
   for (const k in schema) {
@@ -193,14 +204,14 @@ export const define = <T extends Record<string,Property<any>>>(schema:T):{[P in 
   return Object.freeze(result) as never
 }
 
-export const get = <T extends object>(object:T):{[P in keyof T]:Property<T>}|undefined => {
+export const get = <T extends object>(object:T):{[P in keyof T]:Property<T>} => {
+  if (!(checksSymbol in object)) {
+    throw new TypeError("Invalid schema object. Schemas must be defined via Check.define")
+  }
   return (object as any)[checksSymbol] as never
 }
 
 const getFuncs = <T extends object>(object:T):{[P in keyof T]:(value:T[P])=>Fail[]} => {
-  if (!(checkFuncsSymbol in object)) {
-    throw new TypeError("No checks defined.")
-  }
   return (object as any)[checkFuncsSymbol] as never
 }
 
@@ -221,13 +232,13 @@ function coerce(sample:unknown, value:unknown) {
   return value
 }
 
-function typeOf(v:unknown) {
+const typeOf = (v:unknown) => {
   if (Array.isArray(v)) return "array"
   if (isDate(v)) return "date"
-  return Array.isArray(v) ? "array" : typeof(v)
+  return typeof(v)
 }
 
-function findByName<T extends object>(object:T, key:string):unknown {
+const findByName = <T extends object>(object:T, key:string):unknown => {
   for (const k in object) {
     if (rename(k) === key) {
       return object[k]
@@ -252,20 +263,26 @@ const run2 = <T extends object>(prefix:string, sample:T, json:InputJSON):Success
   type K = keyof T
   const result:InputJSON = {}
   const checks = get(sample)
-  if (checks === undefined) {
-    throw new TypeError(prefix + " no checks defined.")
-  }
   const funcs = getFuncs(sample)
   for (const k in funcs) {
     const check = checks[k]
     const sampleValue = sample[k]
-    const value = coerce(sampleValue, check.name ? json[check.name] : findByName(json, k))
-    if (check.required ?? true) {
+    let value = coerce(sampleValue, check.name ? json[check.name] : findByName(json, k))
+    if (check.required !== false) {
       if (value === undefined || value === null) {
-        return { success:false, fail: new Fail(prefix + k, REQ, "missing required property") }
+        if (check.required === "default") {
+          value = sampleValue
+        } else {
+          return { success:false, fail: new Fail(prefix + k, REQ, "missing required property") }
+        }
       }
       if (!sameType(sampleValue, value)) {
         return { success:false, fail:new Fail(prefix + k, TYPE, `type mismatch, expected ${typeOf(sampleValue)} but got ${typeOf(value)}`)}
+      }
+    }
+    if (check.allowed !== undefined && check.fallback !== undefined) {
+      if (check.allowed.indexOf(value as never) < 0) {
+        value = check.fallback
       }
     }
     const fails = funcs[k](value as never)
@@ -298,37 +315,19 @@ export const run = <T extends object>(sample:T, json:InputJSON):Success<T>|Failu
   return run2("", sample, json)
 }
 
-export const copy = <T extends object>(sample:T, object:T) => {
-  (object as any)[checksSymbol] = get(sample);
-  (object as any)[checkFuncsSymbol] = getFuncs(sample)
-}
-
-export const examine = <T extends object>(object:T):{[P in keyof T]:Fail[]} => {
-  type K = keyof T
-  const result:Partial<Record<K,Fail[]>> = {}
-  const checks = getFuncs(object)
-  for (const k in checks) {
-    result[k] = checks[k](object[k])
+export const parse = <T extends object>(sample:T, json:string):T => {
+  const r = run(sample, JSON.parse(json))
+  if (r.success) {
+    return r.result
+  } else {
+    throw new CheckError(r.fail)
   }
-  return result as never
 }
 
-export const runOne = <T extends object, K extends keyof T>(object:T, k:K, v:T[K]):Fail[] => {
-  const check = getFuncs(object)[k]!
+export const runOne = <T extends object, K extends keyof T>(schema:T, object:T, k:K, v:T[K]):Fail[] => {
+  const check = getFuncs(schema)[k]!
   return check(v)
 }
-
-export const raise = <T extends object>(object:T):void => {
-  type K = keyof T
-  const results = examine(object)
-  for (const k in results) {
-    const fails = results[k]
-    if (fails.length !== 0) {
-      throw new CheckError(fails[0]!)
-    }
-  }
-}
-
 
 let rename = (name:string):string => {
   return name

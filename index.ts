@@ -184,9 +184,7 @@ const toFunction = <T>(name:string, sample:T, p:Property<T>):(value:T)=>Fail[] =
 }
 
 type Has<T extends Record<string,Property<any>>,P extends keyof T> = 
-    T[P]["required"] extends false ? "N" : 
-    T[P]["required"] extends "default" ? "N" :
-    "Y" 
+    T[P]["required"] extends false ? "N" : "Y"
 
 export const define = <T extends Record<string,Property<any>>>(schema:T):
   ( { [P in keyof T as Has<T,P> extends "Y" ? P : never]:  T[P]["v"] }

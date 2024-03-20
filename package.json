@@ -1,6 +1,6 @@
 {
   "name": "loudo-check",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "Add type/value safety checks to objects.",
   "type": "module",
   "main": "dist/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "loudo-check",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "Add type/value safety checks to objects.",
   "type": "module",
   "main": "dist/index.js",
@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "jest --coverage"
+    "test": "vitest run --coverage"
   },
   "repository": {
     "type": "git",

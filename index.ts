@@ -13,6 +13,13 @@ export class Fail {
 
 export namespace Check {//
 
+
+let skip = true
+
+export const skipInvalidObjects = (flag:boolean) => {
+  skip = flag
+}
+
 export const TYPE = "TYPE"
 export const MIN = "MIN"
 export const MAX = "MAX"
@@ -150,6 +157,8 @@ const integerChecker = <T>(name:string, sample:T, integer:boolean|undefined):Che
 
 const checkFuncsSymbol = Symbol("checkFuncs")
 const checksSymbol = Symbol("checks")
+const extensionsSymbol = Symbol("extensions")
+const gettersSymbol=  Symbol("getters")
 
 const optimize = <T>(name:string, sample:T, p:Property<T>):Optimized<T> => {
   const required = p.required ?? true
@@ -183,12 +192,14 @@ const toFunction = <T>(name:string, sample:T, p:Property<T>):(value:T)=>Fail[] =
 
 }
 
-type Has<T extends Record<string,Property<any>>,P extends keyof T> = 
-    T[P]["required"] extends false ? "N" : "Y"
+type Schema = Record<string,Property<any>>
 
-export const define = <T extends Record<string,Property<any>>>(schema:T):
-  ( { [P in keyof T as Has<T,P> extends "Y" ? P : never]:  T[P]["v"] }
-  & { [P in keyof T as Has<T,P> extends "N"  ? P : never]?: T[P]["v"] }  
+type Has<S extends Schema,P extends keyof S> = 
+  S[P]["required"] extends false ? "N" : "Y"
+
+export const define = <S extends Schema>(schema:S):
+  ( { [P in keyof S as Has<S,P> extends "Y" ? P : never]:  S[P]["v"] }
+  & { [P in keyof S as Has<S,P> extends "N"  ? P : never]?: S[P]["v"] }
 ) => {
   const result:any = {}
   const full:any = {}
@@ -199,7 +210,34 @@ export const define = <T extends Record<string,Property<any>>>(schema:T):
   }
   result[checksSymbol] = schema
   result[checkFuncsSymbol] = full
-  return Object.freeze(result) as never
+  return result as never
+}
+
+type Getter<T extends object,R> = (instance:T)=>R
+type Getters<T extends object> = Record<string,Getter<T,any>>
+type Got<T extends object,G extends Getters<T>> =
+  { [P in keyof G]: ReturnType<G[P]> }
+
+const addGetters = <T extends object,G extends Getters<T>>(object:T, getters:G) => {
+  for (const k in getters) {
+    const getter = getters[k]!
+    Object.defineProperty(object, k, {
+      get: () => {
+        return getter(object)
+      }
+    })
+  }
+}
+
+export function getters<T extends object,G extends Getters<T>>
+(schema:T, getters:G): asserts schema is T&Got<T,G> {
+  addGetters(schema, getters);
+  (schema as any)[gettersSymbol] = getters
+}
+
+export function extend<T extends object,E extends object>(schema:T, extensions:E): asserts schema is T&E {
+  Object.assign(schema, extensions);
+  (schema as any)[extensionsSymbol] = extensions
 }
 
 export const get = <T extends object>(object:T):{[P in keyof T]:Property<T>} => {
@@ -269,7 +307,7 @@ const run2 = <T extends object>(prefix:string, sample:T, json:InputJSON):Success
     if (check.required !== false) {
       if (value === undefined || value === null) {
         if (check.required === "default") {
-          value = sampleValue
+          value = Array.isArray(sampleValue) ? [] : sampleValue
         } else {
           return { success:false, fail: new Fail(prefix + k, REQ, "missing required property") }
         }
@@ -297,13 +335,26 @@ const run2 = <T extends object>(prefix:string, sample:T, json:InputJSON):Success
         }
         if (typeof(element) === "object") {
           const r = run2(prefix + k + "[" + i + "].", sampleElement, element)
-          if (!r.success) return r
-          value[i] = r
+          if (r.success) {
+            value[i] = r
+          } else if (skip) {
+            log("Skipping " + r.fail.prefix + " - " + r.fail.message)
+            value.splice(i, 1)
+          } else {
+            return r
+          }
         }
       }
     } else if (!isDate(sampleValue) && typeof(value) === "object") {
       const r = run2(prefix + k + ".", sampleValue as object, value as never)
-      if (!r.success) return r
+      if (r.success) {
+        result[k] = r.result
+      } else if (skip && check.required === false) {
+        log("Skipping " + r.fail.prefix + " - " + r.fail.message)
+        result[k] = undefined
+      } else {
+        return r
+      }
     }
   }
   return { success:true, result:result as never }
@@ -316,6 +367,10 @@ export const run = <T extends object>(sample:T, json:InputJSON):Success<T>|Failu
 export const parse = <T extends object>(sample:T, json:string):T => {
   const r = run(sample, JSON.parse(json))
   if (r.success) {
+    const extensions = (sample as any)[extensionsSymbol]
+    Object.assign(r.result, extensions);
+    const getters = (sample as any)[gettersSymbol]
+    addGetters(r.result, getters)
     return r.result
   } else {
     throw new CheckError(r.fail)
@@ -335,5 +390,10 @@ export const renameWith = (namer:(name:string)=>string):void => {
   rename = namer
 }
 
+let log:(message:string)=>void = console.log
+
+export const logWith = (logger:(message:string)=>void):void => {
+  log = logger
+}
 
 }//

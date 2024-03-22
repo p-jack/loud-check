@@ -2,13 +2,19 @@ import { Check, Fail } from "./index"
 
 import {
   afterEach,
+  beforeEach,
   describe,
   expect,
   test,
 } from 'vitest'
 
+beforeEach(() => {
+  Check.skipInvalidObjects(false)
+})
+
 afterEach(() => {
   Check.renameWith((name:string) => name)
+  Check.logWith(console.log)
 })
 
 const yell = <T extends object>(sample:T, object:{ [key: string]: unknown }):T => {
@@ -41,6 +47,12 @@ describe("required", ()=>{
     const result = yell(sample, {})
     expect(result.p).toBe("xyzzy")
     yell(sample, {p:""})
+  })
+  test("default array", ()=>{
+    const sample = Check.define({p:{v:[0], required:"default"}})
+    const result = yell(sample, {})
+    expect(result.p).toStrictEqual([])
+    yell(sample, {p:[1,2,3]})
   })
   test("non-required fields are still validated if present", ()=>{
     const sample = Check.define({
@@ -184,18 +196,34 @@ test("dates", () => {
   expect(() => { yell(sample, {d:"foo"})}).toThrow("d: type mismatch, expected date but got string")
 })
 
-test("nested objects", () => {
-  const sample2 = Check.define({ s:{v:"1", min:1 }})
-  const sample1 = Check.define({ o:{v:sample2 }})
-  const good = { o: { s: "2" } }
-  const r = Check.run(sample1, good)
-  if (r.success) {
-    expect(r.result.o.s).toBe("2")
-  } else {
-    expect(r.success).toBe(true)
-  }
-  const bad = { o: { s: "" } }
-  expect(() => { yell(sample1, bad) }).toThrow("o.s: length of 0 < minimum length of 1")
+describe("nested objects", () => {
+  test("skipping", () => {
+    Check.skipInvalidObjects(true)
+    const logs:string[] = []
+    Check.logWith((msg:string) => logs.push(msg))
+    const sample2 = Check.define({ s: {v:"1", min:1}})
+    const sample1 = Check.define({
+      o1: {v:sample2},
+      o2: {v:sample2, required:false}
+    })
+    const good = { o1: { s: "1" }, o2: { s:[] } }
+    const r = yell(sample1, good)
+    expect(r.o2).toBeUndefined()
+    expect(logs[0]).toBe("Skipping o2.s - type mismatch, expected string but got array")
+  })
+  test("not skipping", () => {
+    const sample2 = Check.define({ s:{v:"1", min:1 }})
+    const sample1 = Check.define({ o:{v:sample2 }})
+    const good = { o: { s: "2" } }
+    const r = Check.run(sample1, good)
+    if (r.success) {
+      expect(r.result.o.s).toBe("2")
+    } else {
+      expect(r.success).toBe(true)
+    }
+    const bad = { o: { s: "" } }
+    expect(() => { yell(sample1, bad) }).toThrow("o.s: length of 0 < minimum length of 1")
+  })
 })
 
 describe("nested arrays", () => {
@@ -219,6 +247,19 @@ describe("nested arrays", () => {
     expect(() => { yell(sample, bad1)}).toThrow("a[0]: type mismatch, expected object but got number")
     const bad2 = { a:[{ n:0 }]}
     expect(() => { yell(sample, bad2)}).toThrow("a[0].n: value of 0 < minimum value of 1")
+  })
+  test("skipping", () => {
+    Check.skipInvalidObjects(true)
+    const sampleElement = Check.define({ n: { v:1, min:1 }})
+    const sample = Check.define({ a: { v:[sampleElement] }})
+    const r = yell(sample, { a: [
+      { n: -1 },
+      { n: 2 },
+      { n: -3 },
+      { n: 4 },
+      { n: -5 },
+    ]})
+    expect(r.a).toStrictEqual([{n:2}, {n:4}])
   })
 })
 
@@ -262,4 +303,32 @@ test("parse", () => {
   const r = Check.parse(sample, '{"p":"s"}')
   expect(r.p).toBe("s")
   expect(()=>{ Check.parse(sample, '{"p":0}')}).toThrow("p: type mismatch, expected string but got number")
+})
+
+test("extensions", () => {
+  const schema = Check.define({
+    x: { v:0, integer:false },
+    y: { v:0, integer:false },
+  })
+  Check.extend(schema, {
+    sum(this:typeof schema):number {
+      return this.x + this.y
+    }
+  })
+  const o = Check.parse(schema, '{"x":11, "y":22}')
+  expect(o.sum()).toBe(33) 
+})
+
+test("getters", () => {
+  const schema = Check.define({
+    x: { v:0, integer:false },
+    y: { v:0, integer:false },
+  })
+  Check.getters(schema, {
+    sum: (o) => {
+      return o.x + o.y
+    }
+  })
+  const o = Check.parse(schema, '{"x":11, "y":22}')
+  expect(o.sum).toBe(33) 
 })

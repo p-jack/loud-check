@@ -361,16 +361,19 @@ const run2 = <T extends object>(prefix:string, sample:T, json:InputJSON):Success
 }
 
 export const run = <T extends object>(sample:T, json:InputJSON):Success<T>|Failure => {
-  return run2("", sample, json)
-}
-
-export const parse = <T extends object>(sample:T, json:string):T => {
-  const r = run(sample, JSON.parse(json))
+  const r = run2("", sample, json)
   if (r.success) {
     const extensions = (sample as any)[extensionsSymbol]
     Object.assign(r.result, extensions);
     const getters = (sample as any)[gettersSymbol]
     addGetters(r.result, getters)
+  }
+  return r
+}
+
+export const parse = <T extends object>(sample:T, json:string):T => {
+  const r = run(sample, JSON.parse(json))
+  if (r.success) {
     return r.result
   } else {
     throw new CheckError(r.fail)

@@ -329,6 +329,8 @@ test("getters", () => {
       return o.x + o.y
     }
   })
-  const o = Check.parse(schema, '{"x":11, "y":22}')
-  expect(o.sum).toBe(33) 
+  const parsed = Check.parse(schema, '{"x":11, "y":22}')
+  expect(parsed.sum).toBe(33)
+  const ran = yell(schema, { x: 11, y: 22 })
+  expect(ran.sum).toBe(33)
 })

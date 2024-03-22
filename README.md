@@ -58,8 +58,61 @@ and the checks for that property.
 
 `Check.define` results in an object that consists of all the 
 defined properties, with their values initialized to the `v` 
-fields of those properties. That is a *sample object*. You can
-pass the sample to `Check.parse` to parse a JSON string, raising
+fields of those properties. That is a _schema object_. You can
+pass the schema to `Check.parse` to parse a JSON string, raising
 an error if the object in the JSON does not pass the checks defined
 in the sample. You can also use `Check.run` to test an object
 against the schema, retrieving any failures without raising an error.
+
+## Extending Schema Objects
+
+It's sometimes useful to define additional getter properties or
+helper functions on a schema object, and to have those extensions 
+propagate to any object created via `Check.parse`.
+
+### Adding Getters
+
+You can use `Check.getters` to define getter functions:
+
+```typescript
+const schema = Check.define({
+  x: { v:0 },
+  y: { v:0 }
+})
+
+Check.getters(schema, {
+  sum: (o) => { return o.x + o.y },
+  min: (o) => { return Math.min(o.x, o.y) }
+})
+
+const obj = Check.parse(schema, `{"x":11, "y":22}`)
+console.log(obj.sum) // 33
+console.log(obj.min) // 11
+```
+
+Note that even though you define the getters as _functions_,
+they become _properties_ during the parse.
+
+### Adding Functions
+
+You can use `Check.extend` to add functions:
+
+```typescript
+const schema = Check.define({
+  x: { v:0 },
+  y: { v:0 }
+})
+
+Check.extend(schema, {
+  sum(this: typeof schema) {
+    return this.x + this.y
+  },
+  min(this: typeof schema) {
+    return Math.min(this.x, this.y)
+  },
+})
+
+const obj = Check.parse(schema, `{"x":11, "y":22}`)
+console.log(obj.sum()) // 33
+console.log(obj.min()) // 11
+```

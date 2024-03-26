@@ -104,15 +104,9 @@ const schema = Check.define({
 })
 
 Check.extend(schema, {
-  sum(this: typeof schema) {
-    return this.x + this.y
-  },
-  min(this: typeof schema) {
-    return Math.min(this.x, this.y)
-  },
+  plus:(o, n:number => { return o.x + o.y + n }
 })
 
 const obj = Check.parse(schema, `{"x":11, "y":22}`)
-console.log(obj.sum()) // 33
-console.log(obj.min()) // 11
+console.log(obj.plus(10)) // 43
 ```

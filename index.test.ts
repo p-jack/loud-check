@@ -310,13 +310,22 @@ test("extensions", () => {
     x: { v:0, integer:false },
     y: { v:0, integer:false },
   })
+  console.log("Extending:")
   Check.extend(schema, {
-    sum(this:typeof schema):number {
-      return this.x + this.y
-    }
+    sum:o => {
+      return o.x + o.y
+    },
+    plus:(o,n:number) => { return o.x + o.y + n }
   })
+  console.log("Parsing:")
   const o = Check.parse(schema, '{"x":11, "y":22}')
-  expect(o.sum()).toBe(33) 
+  console.log(o)
+  expect(o.sum()).toBe(33)
+  expect(o.plus(10)).toBe(43)
+  console.log("Running:")
+  Check.run(schema, o)
+  expect(o.sum()).toBe(33)
+  expect(o.plus(10)).toBe(43)
 })
 
 test("getters", () => {

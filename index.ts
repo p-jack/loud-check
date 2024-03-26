@@ -218,7 +218,7 @@ type Getters<T extends object> = Record<string,Getter<T,any>>
 type Got<T extends object,G extends Getters<T>> =
   { [P in keyof G]: ReturnType<G[P]> }
 
-const addGetters = <T extends object,G extends Getters<T>>(object:T, getters:G) => {
+const applyGetters = <T extends object,G extends Getters<T>>(object:T, getters:G) => {
   for (const k in getters) {
     const getter = getters[k]!
     Object.defineProperty(object, k, {
@@ -227,17 +227,32 @@ const addGetters = <T extends object,G extends Getters<T>>(object:T, getters:G) 
       }
     })
   }
+  (object as any)[gettersSymbol] = getters
 }
 
 export function getters<T extends object,G extends Getters<T>>
 (schema:T, getters:G): asserts schema is T&Got<T,G> {
-  addGetters(schema, getters);
+  get(schema)
+  applyGetters(schema, getters);
   (schema as any)[gettersSymbol] = getters
 }
 
-export function extend<T extends object,E extends object>(schema:T, extensions:E): asserts schema is T&E {
-  Object.assign(schema, extensions);
-  (schema as any)[extensionsSymbol] = extensions
+
+type Extension<T extends object> = (that:T, ...args:any)=>any
+type Extensions<T extends object> = Record<string,Extension<T>>
+
+const applyExtend = <T extends object,E extends Extensions<T>>(object:T, extensions:E) => {
+  const o = object as any
+  for (const k in extensions) {
+    const ext = extensions[k]!
+    o[k] = (...args:any) => { return ext(object, ...args) }
+  }
+  o[extensionsSymbol] = extensions
+}
+
+export function extend<T extends object,E extends Extensions<T>>(schema:T, extensions:E): asserts schema is T & {[K in keyof E]: E[K] extends (x:any, ...args:infer P)=>infer R ? (...args:P)=>R : never} {
+  get(schema)
+  applyExtend(schema, extensions)
 }
 
 export const get = <T extends object>(object:T):{[P in keyof T]:Property<T>} => {
@@ -364,9 +379,9 @@ export const run = <T extends object>(sample:T, json:InputJSON):Success<T>|Failu
   const r = run2("", sample, json)
   if (r.success) {
     const extensions = (sample as any)[extensionsSymbol]
-    Object.assign(r.result, extensions);
+    applyExtend(r.result, extensions)
     const getters = (sample as any)[gettersSymbol]
-    addGetters(r.result, getters)
+    applyGetters(r.result, getters)
   }
   return r
 }

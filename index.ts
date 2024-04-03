@@ -10,6 +10,7 @@ export class Fail {
   }
 }
 
+export type Meld<T extends object> = {[K in keyof T]:T[K]}
 
 export namespace Check {//
 
@@ -60,7 +61,7 @@ export interface Property<T> {
   required?:Required
   min?:Limit<T>
   max?:Limit<T>
-  allowed?:T[]
+  allowed?:readonly T[]
   fallback?:T
   integer?:boolean
   regex?:RegExp
@@ -119,7 +120,7 @@ const maxChecker = <T>(name:string, sample:T, max:Limit<T>|undefined):Checker<T>
   }
 }
 
-const allowedChecker = <T>(name:string, allowed:T[]|undefined):Checker<T>|undefined => {
+const allowedChecker = <T>(name:string, allowed:readonly T[]|undefined):Checker<T>|undefined => {
   if (allowed === undefined) {
     return undefined
   }
@@ -198,7 +199,7 @@ type Has<S extends Schema,P extends keyof S> =
   S[P]["required"] extends false ? "N" : "Y"
 
 export const define = <S extends Schema>(schema:S):
-  ( { [P in keyof S as Has<S,P> extends "Y" ? P : never]:  S[P]["v"] }
+  ({ [P in keyof S as Has<S,P> extends "Y" ? P : never]:  S[P]["v"] }
   & { [P in keyof S as Has<S,P> extends "N"  ? P : never]?: S[P]["v"] }
 ) => {
   const result:any = {}

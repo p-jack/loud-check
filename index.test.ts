@@ -317,15 +317,20 @@ test("extensions", () => {
     },
     plus:(o,n:number) => { return o.x + o.y + n }
   })
+  Check.extend(schema, {
+    big:o => { return o.sum() > 10 }
+  })
   console.log("Parsing:")
   const o = Check.parse(schema, '{"x":11, "y":22}')
   console.log(o)
   expect(o.sum()).toBe(33)
   expect(o.plus(10)).toBe(43)
+  expect(o.big()).toBe(true)
   console.log("Running:")
   Check.run(schema, o)
   expect(o.sum()).toBe(33)
   expect(o.plus(10)).toBe(43)
+  expect(o.big()).toBe(true)
 })
 
 test("getters", () => {
@@ -338,8 +343,15 @@ test("getters", () => {
       return o.x + o.y
     }
   })
+  Check.getters(schema, {
+    big: (o) => {
+      return o.sum > 10
+    }
+  })
   const parsed = Check.parse(schema, '{"x":11, "y":22}')
   expect(parsed.sum).toBe(33)
+  expect(parsed.big).toStrictEqual(true)
   const ran = yell(schema, { x: 11, y: 22 })
   expect(ran.sum).toBe(33)
+  expect(ran.big).toStrictEqual(true)
 })

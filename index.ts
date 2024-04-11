@@ -228,14 +228,19 @@ const applyGetters = <T extends object,G extends Getters<T>>(object:T, getters:G
       }
     })
   }
-  (object as any)[gettersSymbol] = getters
+  let cached = (object as any)[gettersSymbol]
+  if (cached === undefined) {
+    cached = {};
+    (object as any)[gettersSymbol] = cached
+  }
+  Object.assign(cached, getters)
+  console.log("CACHED", cached)
 }
 
 export function getters<T extends object,G extends Getters<T>>
 (schema:T, getters:G): asserts schema is T&Got<T,G> {
   get(schema)
   applyGetters(schema, getters);
-  (schema as any)[gettersSymbol] = getters
 }
 
 
@@ -248,7 +253,12 @@ const applyExtend = <T extends object,E extends Extensions<T>>(object:T, extensi
     const ext = extensions[k]!
     o[k] = (...args:any) => { return ext(object, ...args) }
   }
-  o[extensionsSymbol] = extensions
+  let cached = (object as any)[extensionsSymbol]
+  if (cached === undefined) {
+    cached = {};
+    (object as any)[extensionsSymbol] = cached
+  }
+  Object.assign(cached, extensions)
 }
 
 export function extend<T extends object,E extends Extensions<T>>(schema:T, extensions:E): asserts schema is T & {[K in keyof E]: E[K] extends (x:any, ...args:infer P)=>infer R ? (...args:P)=>R : never} {

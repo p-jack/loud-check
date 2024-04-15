@@ -362,7 +362,7 @@ const run2 = <T extends object>(prefix:string, sample:T, json:InputJSON):Success
         if (typeof(element) === "object") {
           const r = run2(prefix + k + "[" + i + "].", sampleElement, element)
           if (r.success) {
-            value[i] = r
+            value[i] = r.result
           } else if (skip) {
             log("Skipping " + r.fail.prefix + " - " + r.fail.message)
             value.splice(i, 1)

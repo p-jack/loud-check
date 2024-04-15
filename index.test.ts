@@ -242,7 +242,8 @@ describe("nested arrays", () => {
     const good1 = { a:[] }
     yell(sample, good1)
     const good2 = { a:[{ n:11 }, { n:22 }, { n:33 }]}
-    yell(sample, good2)
+    const x = yell(sample, good2)
+    expect(x.a[0]?.n).toBe(11)
     const bad1 = { a:[1,2,3] }
     expect(() => { yell(sample, bad1)}).toThrow("a[0]: type mismatch, expected object but got number")
     const bad2 = { a:[{ n:0 }]}

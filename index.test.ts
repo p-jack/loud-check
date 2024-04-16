@@ -238,12 +238,16 @@ describe("nested arrays", () => {
   })
   test("object elements", () => {
     const sampleElement = Check.define({ n: { v:1, min:1 }})
+    Check.getters(sampleElement, {
+      nn:o => o.n + o.n
+    })
     const sample = Check.define({ a:{ v:[sampleElement] }})
     const good1 = { a:[] }
     yell(sample, good1)
     const good2 = { a:[{ n:11 }, { n:22 }, { n:33 }]}
     const x = yell(sample, good2)
     expect(x.a[0]?.n).toBe(11)
+    expect(x.a[0]?.nn).toBe(22)
     const bad1 = { a:[1,2,3] }
     expect(() => { yell(sample, bad1)}).toThrow("a[0]: type mismatch, expected object but got number")
     const bad2 = { a:[{ n:0 }]}
@@ -260,7 +264,9 @@ describe("nested arrays", () => {
       { n: 4 },
       { n: -5 },
     ]})
-    expect(r.a).toStrictEqual([{n:2}, {n:4}])
+    expect(r.a.length).toBe(2)
+    expect(r.a[0]?.n).toBe(2)
+    expect(r.a[1]?.n).toBe(4)
   })
 })
 
@@ -311,7 +317,6 @@ test("extensions", () => {
     x: { v:0, integer:false },
     y: { v:0, integer:false },
   })
-  console.log("Extending:")
   Check.extend(schema, {
     sum:o => {
       return o.x + o.y
@@ -321,13 +326,10 @@ test("extensions", () => {
   Check.extend(schema, {
     big:o => { return o.sum() > 10 }
   })
-  console.log("Parsing:")
   const o = Check.parse(schema, '{"x":11, "y":22}')
-  console.log(o)
   expect(o.sum()).toBe(33)
   expect(o.plus(10)).toBe(43)
   expect(o.big()).toBe(true)
-  console.log("Running:")
   Check.run(schema, o)
   expect(o.sum()).toBe(33)
   expect(o.plus(10)).toBe(43)

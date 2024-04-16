@@ -234,7 +234,6 @@ const applyGetters = <T extends object,G extends Getters<T>>(object:T, getters:G
     (object as any)[gettersSymbol] = cached
   }
   Object.assign(cached, getters)
-  console.log("CACHED", cached)
 }
 
 export function getters<T extends object,G extends Getters<T>>
@@ -321,7 +320,7 @@ export interface Failure {
   fail: Fail
 }
 
-const run2 = <T extends object>(prefix:string, sample:T, json:InputJSON):Success<T>|Failure => {
+const run3 = <T extends object>(prefix:string, sample:T, json:InputJSON):Success<T>|Failure => {
   type K = keyof T
   const result:InputJSON = {}
   const checks = get(sample)
@@ -353,6 +352,7 @@ const run2 = <T extends object>(prefix:string, sample:T, json:InputJSON):Success
     }
     result[k] = value
     if (Array.isArray(value)) {
+      const arr:any[] = []
       const sampleElement = (sampleValue as never)[0]
       for (let i = 0; i < value.length; i++) {
         const element = value[i]
@@ -362,15 +362,17 @@ const run2 = <T extends object>(prefix:string, sample:T, json:InputJSON):Success
         if (typeof(element) === "object") {
           const r = run2(prefix + k + "[" + i + "].", sampleElement, element)
           if (r.success) {
-            value[i] = r.result
+            arr.push(r.result)
           } else if (skip) {
             log("Skipping " + r.fail.prefix + " - " + r.fail.message)
-            value.splice(i, 1)
           } else {
             return r
           }
+        } else {
+          arr.push(element)
         }
       }
+      result[k] = arr
     } else if (!isDate(sampleValue) && typeof(value) === "object") {
       const r = run2(prefix + k + ".", sampleValue as object, value as never)
       if (r.success) {
@@ -386,8 +388,8 @@ const run2 = <T extends object>(prefix:string, sample:T, json:InputJSON):Success
   return { success:true, result:result as never }
 }
 
-export const run = <T extends object>(sample:T, json:InputJSON):Success<T>|Failure => {
-  const r = run2("", sample, json)
+const run2 = <T extends object>(prefix:string, sample:T, json:InputJSON):Success<T>|Failure => {
+  const r = run3(prefix, sample, json)
   if (r.success) {
     const extensions = (sample as any)[extensionsSymbol]
     applyExtend(r.result, extensions)
@@ -395,6 +397,10 @@ export const run = <T extends object>(sample:T, json:InputJSON):Success<T>|Failu
     applyGetters(r.result, getters)
   }
   return r
+}
+
+export const run = <T extends object>(sample:T, json:InputJSON):Success<T>|Failure => {
+  return run2("", sample, json)
 }
 
 export const parse = <T extends object>(sample:T, json:string):T => {

@@ -1,4 +1,4 @@
-import { Check, Fail } from "./index"
+import { BIGINT, Check, Fail } from "./index"
 
 import {
   afterEach,
@@ -13,52 +13,43 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  Check.renameWith((name:string) => name)
-  Check.logWith(console.log)
+  Check.warnWith(console.warn)
 })
-
-const yell = <T extends object>(sample:T, object:{ [key: string]: unknown }):T => {
-  const r = Check.run(sample, object)
-  if (!r.success) {
-    throw new Check.CheckError(r.fail)
-  }
-  return r.result
-}
 
 describe("required", ()=>{
   interface I { p?:string }
   test("yes is the default", ()=>{
-    const sample = Check.define({p:{v:""}})
-    expect(() => {yell(sample, {}) }).toThrow("p: missing required property")
-    yell(sample, {p:""})
+    const cls = Check.define({p:{v:"x"}})
+    expect(() => {Check.raise(cls, {}) }).toThrow("p: missing required property")
+    Check.raise(cls, {p:""})
   })
   test("explicitly required", ()=>{
-    const sample = Check.define({p:{v:"", required:true}})
-    expect(() => {yell(sample, {}) }).toThrow("p: missing required property")
-    yell(sample, {p:""})
+    const cls = Check.define({p:{v:"", required:true}})
+    expect(() => {Check.raise(cls, {}) }).toThrow("p: missing required property")
+    Check.raise(cls, {p:""})
   })
   test("not required", ()=>{
-    const sample = Check.define({p:{v:"", required:false}})
-    yell(sample, {p:""})
-    yell(sample, {})
+    const cls = Check.define({p:{v:"", required:false}})
+    Check.raise(cls, {p:""})
+    Check.raise(cls, {})
   })
   test("default value", ()=>{
-    const sample = Check.define({p:{v:"xyzzy", required:"default"}})
-    const result = yell(sample, {})
+    const cls = Check.define({p:{v:"xyzzy", required:"default"}})
+    const result = Check.raise(cls, {})
     expect(result.p).toBe("xyzzy")
-    yell(sample, {p:""})
+    Check.raise(cls, {p:""})
   })
   test("default array", ()=>{
-    const sample = Check.define({p:{v:[0], required:"default"}})
-    const result = yell(sample, {})
+    const cls = Check.define({p:{v:[0], required:"default"}})
+    const result = Check.raise(cls, {})
     expect(result.p).toStrictEqual([])
-    yell(sample, {p:[1,2,3]})
+    Check.raise(cls, {p:[1,2,3]})
   })
   test("non-required fields are still validated if present", ()=>{
-    const sample = Check.define({
+    const cls = Check.define({
       p:{v:0, required:false, min:0}
     })
-    expect(() => {yell(sample, {p:-1})}).toThrow("p: value of -1 < minimum value of 0")
+    expect(() => {Check.raise(cls, {p:-1})}).toThrow("p: value of -1 < minimum value of 0")
   })
 })
 
@@ -68,115 +59,115 @@ function newDate(year:number):Date {
 
 describe("min", ()=>{
   test("number", ()=>{
-    const sample = Check.define({v:{ v:10, min:10 }})
-    expect(() => {yell(sample, {v:5}) }).toThrow("v: value of 5 < minimum value of 10")
-    yell(sample, {v:10})
-    yell(sample, {v:11})
-    yell(sample, {v:110000})
+    const cls = Check.define({v:{ v:10, min:10 }})
+    expect(() => {Check.raise(cls, {v:5}) }).toThrow("v: value of 5 < minimum value of 10")
+    Check.raise(cls, {v:10})
+    Check.raise(cls, {v:11})
+    Check.raise(cls, {v:110000})
   })
   test("BigInt", ()=>{
-    const sample = Check.define({v:{ v:BigInt(10), min:10 }})
-    expect(() => {yell(sample, {v:BigInt(5)}) }).toThrow("v: value of 5 < minimum value of 10")
-    yell(sample, {v:BigInt(10)})
-    yell(sample, {v:BigInt(11)})
-    yell(sample, {v:BigInt(110000)})
+    const cls = Check.define({v:{ v:BigInt(10), min:10 }})
+    expect(() => {Check.raise(cls, {v:BigInt(5)}) }).toThrow("v: value of 5 < minimum value of 10")
+    Check.raise(cls, {v:BigInt(10)})
+    Check.raise(cls, {v:BigInt(11)})
+    Check.raise(cls, {v:BigInt(110000)})
   })
   test("Date", ()=>{
-    const sample = Check.define({v:{ v:newDate(1970), min:10 }})
-    expect(() => {yell(sample, {v:newDate(1969)}) }).toThrow("< minimum value of")
-    yell(sample, {v:newDate(1970)})
-    yell(sample, {v:newDate(2000)})
-    yell(sample, {v:newDate(110000)})
+    const cls = Check.define({v:{ v:newDate(1970), min:10 }})
+    expect(() => {Check.raise(cls, {v:newDate(1969)}) }).toThrow("< minimum value of")
+    Check.raise(cls, {v:newDate(1970)})
+    Check.raise(cls, {v:newDate(2000)})
+    Check.raise(cls, {v:newDate(110000)})
   })
   test("string (length)", ()=>{
-    const sample = Check.define({v:{ v:"1234567890", min:10 }})
-    expect(() => {yell(sample, {v:"12345"}) }).toThrow("v: length of 5 < minimum length of 10")
-    yell(sample, {v:"1234567890"})
-    yell(sample, {v:"1234567890A"})
-    yell(sample, {v:"1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ"})
+    const cls = Check.define({v:{ v:"1234567890", min:10 }})
+    expect(() => {Check.raise(cls, {v:"12345"}) }).toThrow("v: length of 5 < minimum length of 10")
+    Check.raise(cls, {v:"1234567890"})
+    Check.raise(cls, {v:"1234567890A"})
+    Check.raise(cls, {v:"1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ"})
   })
 })
 
 describe("max", ()=>{
   test("number", ()=>{
-    const sample = Check.define({v:{ v:0, max:10 }})
-    expect(() => {yell(sample, {v:50}) }).toThrow("v: value of 50 > maximum value of 10")
-    yell(sample, {v:10})
-    yell(sample, {v:9})
-    yell(sample, {v:-110000})
+    const cls = Check.define({v:{ v:0, max:10 }})
+    expect(() => {Check.raise(cls, {v:50}) }).toThrow("v: value of 50 > maximum value of 10")
+    Check.raise(cls, {v:10})
+    Check.raise(cls, {v:9})
+    Check.raise(cls, {v:-110000})
   })
   test("BigInt", ()=>{
-    const sample = Check.define({v:{ v:BigInt(10), max:BigInt(10) }})
-    expect(() => {yell(sample, {v:BigInt(50)}) }).toThrow("v: value of 50 > maximum value of 10")
-    yell(sample, {v:BigInt(10)})
-    yell(sample, {v:BigInt(9)})
-    yell(sample, {v:BigInt(-110000)})
+    const cls = Check.define({v:{ v:BigInt(10), max:BigInt(10) }})
+    expect(() => {Check.raise(cls, {v:BigInt(50)}) }).toThrow("v: value of 50 > maximum value of 10")
+    Check.raise(cls, {v:BigInt(10)})
+    Check.raise(cls, {v:BigInt(9)})
+    Check.raise(cls, {v:BigInt(-110000)})
   })
   test("Date", ()=>{
-    const sample = Check.define({v:{ v:newDate(0), max:newDate(1970) }})
-    expect(() => {yell(sample, {v:newDate(1971)}) }).toThrow("> maximum value of")
-    yell(sample, {v:newDate(1969)})
-    yell(sample, {v:newDate(1800)})
+    const cls = Check.define({v:{ v:newDate(0), max:newDate(1970) }})
+    expect(() => {Check.raise(cls, {v:newDate(1971)}) }).toThrow("> maximum value of")
+    Check.raise(cls, {v:newDate(1969)})
+    Check.raise(cls, {v:newDate(1800)})
   })
   test("string (length)", ()=>{
-    const sample = Check.define({v:{ v:"", max:3 }})
-    expect(() => {yell(sample, {v:"12345"}) }).toThrow("v: length of 5 > maximum length of 3")
-    yell(sample, {v:"123"})
-    yell(sample, {v:"12"})
-    yell(sample, {v:""})
+    const cls = Check.define({v:{ v:"", max:3 }})
+    expect(() => {Check.raise(cls, {v:"12345"}) }).toThrow("v: length of 5 > maximum length of 3")
+    Check.raise(cls, {v:"123"})
+    Check.raise(cls, {v:"12"})
+    Check.raise(cls, {v:""})
   })
 })
 
 describe("allowed", ()=>{
   test("allowed", ()=>{
-    const sample = Check.define({v:{ v:"a", allowed:["a","b","c"]}})
-    expect(() => {yell(sample, {v:"d"}) }).toThrow("v: invalid value: d - valid values are: a,b,c")
-    yell(sample, {v:"a"})
-    yell(sample, {v:"b"})
-    yell(sample, {v:"c"})
+    const cls = Check.define({v:{ v:"a", allowed:["a","b","c"]}})
+    expect(() => {Check.raise(cls, {v:"d"}) }).toThrow("v: invalid value: d - valid values are: a,b,c")
+    Check.raise(cls, {v:"a"})
+    Check.raise(cls, {v:"b"})
+    Check.raise(cls, {v:"c"})
   })
   test("fallback", () => {
-    const sample = Check.define({v:{ v:"a", allowed:["a","b","c"], fallback:"a"}})
-    const r = yell(sample, {v:"x"})
+    const cls = Check.define({v:{ v:"a", allowed:["a","b","c"], fallback:"a"}})
+    const r = Check.raise(cls, {v:"x"})
     expect(r.v).toBe("a")
   })
 })
 
 test("regex", () => {
-  const sample = Check.define({s:{ v:"abc", regex:/abc/}})
-  expect(() => {yell(sample, {s:"a"})}).toThrow("s: invalid value: a - must match /abc/")
-  expect(() => {yell(sample, {s:""})}).toThrow("s: invalid value:  - must match /abc/")
-  yell(sample, {s:"abc"})
-  yell(sample, {s:"123abc"})
-  yell(sample, {s:"1abc1"})
+  const cls = Check.define({s:{ v:"abc", regex:/abc/}})
+  expect(() => {Check.raise(cls, {s:"a"})}).toThrow("s: invalid value: a - must match /abc/")
+  expect(() => {Check.raise(cls, {s:""})}).toThrow("s: invalid value:  - must match /abc/")
+  Check.raise(cls, {s:"abc"})
+  Check.raise(cls, {s:"123abc"})
+  Check.raise(cls, {s:"1abc1"})
 })
 
 describe("integer", () => {
   test("true by default", () => {
-    const sample = Check.define({n:{v:0}})
-    expect(() => {yell(sample, {n:3.1})}).toThrow("n: value of 3.1 is not a safe integer")
-    expect(() => {yell(sample, {n:2**53})}).toThrow("n: value of 9007199254740992 is not a safe integer")
-    yell(sample, {n:-1000})
-    yell(sample, {n:2**53-1})
+    const cls = Check.define({n:{v:0}})
+    expect(() => {Check.raise(cls, {n:3.1})}).toThrow("n: value of 3.1 is not a safe integer")
+    expect(() => {Check.raise(cls, {n:2**53})}).toThrow("n: value of 9007199254740992 is not a safe integer")
+    Check.raise(cls, {n:-1000})
+    Check.raise(cls, {n:2**53-1})
   })
   test("explicitly set to true", () => {
-    const sample = Check.define({n:{v:0, integer:true}})
-    expect(() => {yell(sample, {n:3.1})}).toThrow("n: value of 3.1 is not a safe integer")
-    expect(() => {yell(sample, {n:2**53})}).toThrow("n: value of 9007199254740992 is not a safe integer")
-    yell(sample, {n:-1000})
-    yell(sample, {n:2**53-1})
+    const cls = Check.define({n:{v:0, integer:true}})
+    expect(() => {Check.raise(cls, {n:3.1})}).toThrow("n: value of 3.1 is not a safe integer")
+    expect(() => {Check.raise(cls, {n:2**53})}).toThrow("n: value of 9007199254740992 is not a safe integer")
+    Check.raise(cls, {n:-1000})
+    Check.raise(cls, {n:2**53-1})
   })
   test("false", () => {
-    const sample = Check.define({n:{v:0, integer:false}})
-    yell(sample, {n:-1000})
-    yell(sample, {n:2**53-1})
-    yell(sample, {n:2**53})
-    yell(sample, {n:3.14})
+    const cls = Check.define({n:{v:0, integer:false}})
+    Check.raise(cls, {n:-1000})
+    Check.raise(cls, {n:2**53-1})
+    Check.raise(cls, {n:2**53})
+    Check.raise(cls, {n:3.14})
   })
 })
 
 test("custom", ()=>{
-  const sample = Check.define({
+  const cls = Check.define({
     v:{
       v:0,
       custom:(value:number)=>{
@@ -186,119 +177,103 @@ test("custom", ()=>{
       }
     }
   })
-  expect(() => {yell(sample, {v:1}) }).toThrow("must be even")
-  yell(sample, {v:0})
-})
-
-test("dates", () => {
-  const sample = Check.define({ d:{ v:newDate(1970) }})
-  yell(sample, {d:"2024-01-08T23:38:03"})
-  expect(() => { yell(sample, {d:"foo"})}).toThrow("d: type mismatch, expected date but got string")
+  expect(() => {Check.raise(cls, {v:1}) }).toThrow("must be even")
+  Check.raise(cls, {v:0})
 })
 
 describe("nested objects", () => {
   test("skipping", () => {
     Check.skipInvalidObjects(true)
     const logs:string[] = []
-    Check.logWith((msg:string) => logs.push(msg))
-    const sample2 = Check.define({ s: {v:"1", min:1}})
-    const sample1 = Check.define({
+    Check.warnWith((msg:string) => logs.push(msg))
+    const cls2 = Check.define({ s: {v:"1", min:1}})
+    const sample2 = Check.sample(cls2)
+    const cls1 = Check.define({
       o1: {v:sample2},
       o2: {v:sample2, required:false}
     })
     const good = { o1: { s: "1" }, o2: { s:[] } }
-    const r = yell(sample1, good)
+    const r = Check.raise(cls1, good)
     expect(r.o2).toBeUndefined()
-    expect(logs[0]).toBe("Skipping o2.s - type mismatch, expected string but got array")
+    expect(logs[0]).toBe("skipping nested object o2.s - expected string but got array")
   })
   test("not skipping", () => {
-    const sample2 = Check.define({ s:{v:"1", min:1 }})
-    const sample1 = Check.define({ o:{v:sample2 }})
+    const cls2 = Check.define({ s:{v:"1", min:1 }})
+    const cls1 = Check.define({ o:{v:Check.sample(cls2) }})
     const good = { o: { s: "2" } }
-    const r = Check.run(sample1, good)
+    const r = Check.run(cls1, good)
     if (r.success) {
       expect(r.result.o.s).toBe("2")
     } else {
       expect(r.success).toBe(true)
     }
     const bad = { o: { s: "" } }
-    expect(() => { yell(sample1, bad) }).toThrow("o.s: length of 0 < minimum length of 1")
+    expect(() => { Check.raise(cls1, bad) }).toThrow("o.s: length of 0 < minimum length of 1")
   })
 })
 
 describe("nested arrays", () => {
   test("primitive elements", () => {
-    const sample = Check.define({ a:{ v:[""] } })
+    const cls = Check.define({ a:{ v:[""] } })
     const good1 = { a:["1", "2", "3"] }
-    yell(sample, good1)
+    Check.raise(cls, good1)
     const good2 = { a:[] }
-    yell(sample, good2)
+    Check.raise(cls, good2)
     const bad = { a:[1, 2, 3] }
-    expect(() => { yell(sample, bad)}).toThrow("a[0]: type mismatch, expected string but got number")
+    expect(() => { Check.raise(cls, bad)}).toThrow("a[0]: expected string but got number")
   })
   test("object elements", () => {
-    const sampleElement = Check.define({ n: { v:1, min:1 }})
-    Check.getters(sampleElement, {
-      nn:o => o.n + o.n
-    })
-    const sample = Check.define({ a:{ v:[sampleElement] }})
+    class Element extends (Check.define({ n: { v:1, min:1 }})) {
+      public get nn() { return this.n + this.n }
+    }
+    const sampleElement = Check.sample(Element)
+    console.log("SAMPLE ELEMENT", sampleElement, Element)
+    const cls = Check.define({ a:{ v:[sampleElement] }})
     const good1 = { a:[] }
-    yell(sample, good1)
+    Check.raise(cls, good1)
     const good2 = { a:[{ n:11 }, { n:22 }, { n:33 }]}
-    const x = yell(sample, good2)
+    const x = Check.raise(cls, good2)
     expect(x.a[0]?.n).toBe(11)
+    console.log(x)
     expect(x.a[0]?.nn).toBe(22)
     const bad1 = { a:[1,2,3] }
-    expect(() => { yell(sample, bad1)}).toThrow("a[0]: type mismatch, expected object but got number")
+    expect(() => { Check.raise(cls, bad1)}).toThrow("a[0]: expected object but got number")
     const bad2 = { a:[{ n:0 }]}
-    expect(() => { yell(sample, bad2)}).toThrow("a[0].n: value of 0 < minimum value of 1")
+    expect(() => { Check.raise(cls, bad2)}).toThrow("a[0].n: value of 0 < minimum value of 1")
   })
   test("skipping", () => {
+    const logs:string[] = []
+    Check.warnWith((msg:string) => logs.push(msg))
     Check.skipInvalidObjects(true)
-    const sampleElement = Check.define({ n: { v:1, min:1 }})
-    const sample = Check.define({ a: { v:[sampleElement] }})
-    const r = yell(sample, { a: [
-      { n: -1 },
+    const sampleCls = Check.define({ n: { v:1, required:true }})
+    const sampleElement = Check.sample(sampleCls)
+    const cls = Check.define({ a: { v:[sampleElement] }})
+    const r = Check.raise(cls, { a: [
+      { n: undefined },
       { n: 2 },
-      { n: -3 },
+      { n: undefined },
       { n: 4 },
-      { n: -5 },
+      { n: undefined },
     ]})
     expect(r.a.length).toBe(2)
     expect(r.a[0]?.n).toBe(2)
     expect(r.a[1]?.n).toBe(4)
+    expect(logs[0]).toBe("skipping element a[0].n - missing required property")
+    expect(logs[1]).toBe("skipping element a[2].n - missing required property")
+    expect(logs[2]).toBe("skipping element a[4].n - missing required property")
+
+    const r2 = Check.raise(cls, { a:[
+      { n: undefined },
+      { n: undefined }, 
+    ]})
+    expect(r2.a.length).toBe(0)
   })
-})
-
-test("rename", () => {
-  Check.renameWith((name:string) => name.replaceAll("_", ""))
-  const sample = Check.define({
-    nounderscores: { v:"" },
-  })
-  const r = Check.run(sample, { no_underscores: "ABC" })
-  if (r.success) {
-    expect(r.result.nounderscores).toBe("ABC")
-  } else {
-    console.log(r.fail)
-    expect(r.fail).toBeUndefined()
-  }
-})
-
-test("custom name", () => {
-  const sample = Check.define({s:{v:"", name:"S"}})
-  const r = Check.parse(sample, '{"S":"123"}')
-  expect(r.s).toBe("123")
-})
-
-
-test("throws error if never defined", ()=>{
-  expect(() => {Check.run({}, {x:5})}).toThrow("Invalid schema object. Schemas must be defined via Check.define")
 })
 
 test("runOne", () => {
-  const sample = Check.define({ n:{ v:10, min:0 }})
+  const cls = Check.define({ n:{ v:10, min:0 }})
   const obj = { n:0 }
-  const fails = Check.runOne(sample, obj, "n", -1)
+  const fails = Check.runOne(cls, obj, "n", -1)
   expect(fails).toHaveLength(1)
   expect(fails[0]?.prefix).toBe("n")
   expect(fails[0]?.code).toBe("MIN")
@@ -306,55 +281,73 @@ test("runOne", () => {
 })
 
 test("parse", () => {
-  const sample = Check.define({p:{v:""}})
-  const r = Check.parse(sample, '{"p":"s"}')
+  const cls = Check.define({p:{v:""}})
+  const r = Check.parse(cls, '{"p":"s"}')
   expect(r.p).toBe("s")
-  expect(()=>{ Check.parse(sample, '{"p":0}')}).toThrow("p: type mismatch, expected string but got number")
+  expect(()=>{ Check.parse(cls, '{"p":0}')}).toThrow("p: expected string but got number")
 })
 
-test("extensions", () => {
-  const schema = Check.define({
-    x: { v:0, integer:false },
-    y: { v:0, integer:false },
-  })
-  Check.extend(schema, {
-    sum:o => {
-      return o.x + o.y
+test("mismatches", () => {
+  const cls1 = Check.define({a:{v:[""]}})
+  expect(()=>{ Check.raise(cls1, {a:""})}).toThrow("a: expected array but got string")
+  const cls2 = Check.define({s:{v:""}})
+  expect(()=>{ Check.raise(cls2, {s:[]})}).toThrow("s: expected string but got array")
+})
+
+test("constructors", () => {
+  class C extends Check.define({n:{v:1,min:1}}) {}
+  const obj = new C({n:1})
+  expect(obj.n).toBe(1)
+  expect(()=>{ new C({n:0})}).toThrow("n: value of 0 < minimum value of 1")
+})
+
+test("recursive data type", () => {
+  interface Node {
+    value:string
+    next?:Node
+  }
+  class NodeClass extends Check.define({
+    value: { v:"xxx" },
+    next: { v:null as unknown as Node, required:false },
+  }) {}
+  Check.recurse(NodeClass, "next", Check.sample(NodeClass))
+  const sample = Check.sample(NodeClass)
+  expect(sample.next).not.toBeNull()
+  expect(sample.next?.value).toBe("xxx")
+  expect(sample.next?.next).toBe(sample)
+})
+
+test("types", () => {
+  Check.addType({
+    name:"bigint",
+    priority:500_000_000,
+    appliesTo:(v:unknown) => typeof(v) === "bigint",
+    mismatch:(json:unknown) => {
+      if (typeof(json) !== "string") return `expected bigint string but got ${typeof(json)}`
     },
-    plus:(o,n:number) => { return o.x + o.y + n }
+    parse:(prefix:string, sample:unknown, json:unknown) => {
+      try {
+        return { success:true, result:BigInt(json as string) }
+      } catch (e:any) {
+        const msg = "message" in e ? e.message : "invalid bigint string"
+        return { success:false, fail:new Fail(prefix, BIGINT, msg) }
+      }
+    }
   })
-  Check.extend(schema, {
-    big:o => { return o.sum() > 10 }
-  })
-  const o = Check.parse(schema, '{"x":11, "y":22}')
-  expect(o.sum()).toBe(33)
-  expect(o.plus(10)).toBe(43)
-  expect(o.big()).toBe(true)
-  Check.run(schema, o)
-  expect(o.sum()).toBe(33)
-  expect(o.plus(10)).toBe(43)
-  expect(o.big()).toBe(true)
+  class C extends Check.define({n:{v:BigInt(0)}}) {}
+  const o = Check.raise(C, {n:"101"})
+  expect(o.n).toBe(BigInt(101))
+  expect(()=>{ Check.raise(C, {n:"xxx"})}).toThrow("n: Cannot convert xxx to a BigInt")
 })
 
-test("getters", () => {
-  const schema = Check.define({
-    x: { v:0, integer:false },
-    y: { v:0, integer:false },
-  })
-  Check.getters(schema, {
-    sum: (o) => {
-      return o.x + o.y
+test("hasProp", () => {
+  class C1 extends Check.define({
+    n: { v:0 }
+  }) {
+    length() {
+      throw new Error()
     }
-  })
-  Check.getters(schema, {
-    big: (o) => {
-      return o.sum > 10
-    }
-  })
-  const parsed = Check.parse(schema, '{"x":11, "y":22}')
-  expect(parsed.sum).toBe(33)
-  expect(parsed.big).toStrictEqual(true)
-  const ran = yell(schema, { x: 11, y: 22 })
-  expect(ran.sum).toBe(33)
-  expect(ran.big).toStrictEqual(true)
+  }
+  class C2 extends Check.define({o:{v:Check.sample(C1)}}) {}
+  const o = Check.raise(C2, {o:{n:1}})
 })

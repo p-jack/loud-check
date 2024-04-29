@@ -317,7 +317,7 @@ export type In<S extends Schema> =
 type HasOut<S extends Schema,P extends keyof S> = 
   S[P]["required"] extends false ? false : true
 
-type Out<S extends Schema> = 
+export type Out<S extends Schema> = 
   { [P in keyof S as HasOut<S,P> extends true  ? P : never]:  S[P]["v"] }
 & { [P in keyof S as HasOut<S,P> extends false ? P : never]?: S[P]["v"] }
 

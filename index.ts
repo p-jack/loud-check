@@ -1,6 +1,3 @@
-// TODO: add "Size" again, that was actually useful
-// TODO: test a subclass
-
 export const TYPE = "TYPE"
 export const MIN = "MIN"
 export const MAX = "MAX"
@@ -11,7 +8,7 @@ export const INTEGER = "INTEGER"
 export const UNKNOWN = "UNKNOWN"
 export const BIGINT = "BIGINT"
 
-class Base {}
+export class Base {}
 
 type InputJSON = { [key: string]: unknown }
 
@@ -29,6 +26,7 @@ export interface Type<T> {
   name:string
   priority:number
   appliesTo(sample:unknown):boolean
+  defaultTo(sample:T):unknown
   mismatch(json:unknown, sample:unknown):string|undefined
   parse(prefix:string, sample:T, json:unknown):Success<T>|Failure
 }
@@ -78,6 +76,7 @@ const types:Type<any>[] = [
     name: "array",
     priority:300_000_000,
     appliesTo:(v:unknown) => Array.isArray(v),
+    defaultTo:() => [],
     mismatch:(json:unknown) => {
       if (!Array.isArray(json)) {
         return "expected array but got " + typeOf(json)
@@ -88,13 +87,13 @@ const types:Type<any>[] = [
       const sampleElement = (sample as unknown[])[0]
       const type = types.find(x => x.appliesTo(sampleElement))!
       const result:unknown[] = []
-      const cls = (sampleElement as any)[clsSym]
       for (let i = 0; i < a.length; i++) {
         const mm = type.mismatch(a[i], sampleElement)
         if (mm) {
           return { success:false, fail:new Fail(prefix + "[" + i + "]", TYPE, mm)}
         }
         if (sampleElement instanceof Base) {
+          const cls = sampleElement.constructor
           const r = run2(cls as never, prefix + "[" + i + "]", a[i])
           if (r.success) {
             result.push(r.result)
@@ -114,6 +113,7 @@ const types:Type<any>[] = [
     name:"checked object",
     priority:200_000_000,
     appliesTo:(v:unknown) => v instanceof Base,
+    defaultTo:(sample:unknown) => sample,
     mismatch:(json:unknown) => {
       const t = typeOf(json)
       if (t !== "object") {
@@ -121,15 +121,16 @@ const types:Type<any>[] = [
       }
     },
     parse:(prefix:string, sample:unknown, json:unknown) => {
-      const cls = (sample as any)[clsSym]
+      const cls = (sample as Base).constructor
       const object = json as Record<string,unknown>
-      return run2(cls, prefix, object)
+      return run2(cls as never, prefix, object)
     }
   },
   {
     name:"default",
     priority:0,
     appliesTo:(v:unknown) => true,
+    defaultTo:(sample:unknown) => sample,
     mismatch:(json:unknown, v:unknown) => {
       const expected = typeOf(v)
       const got = typeOf(json)
@@ -271,7 +272,6 @@ interface Field<T> {
 type Fields<T extends object> = {[P in keyof T]: Field<T[P]>}
 
 const symbol = Symbol("Check_metadata")
-const clsSym = Symbol("Check_cls")
 
 const optimize = <T>(name:string, sample:T, p:Property<T>):Optimized<T> => {
   const required = p.required ?? true
@@ -305,12 +305,12 @@ const toFunction = <T>(name:string, p:Property<T>):(value:T)=>Fail[] => {
   }
 }
 
-type Schema = Record<string,Property<any>>
+export type Schema = Record<string,Property<any>>
 
 type HasIn<S extends Schema,P extends keyof S> = 
   S[P]["required"] extends "default"|false ? false : true
 
-type In<S extends Schema> = 
+export type In<S extends Schema> = 
   { [P in keyof S as HasIn<S,P> extends true  ? P : never]:  S[P]["v"] }
 & { [P in keyof S as HasIn<S,P> extends false ? P : never]?: S[P]["v"] }
 
@@ -321,17 +321,16 @@ type Out<S extends Schema> =
   { [P in keyof S as HasOut<S,P> extends true  ? P : never]:  S[P]["v"] }
 & { [P in keyof S as HasOut<S,P> extends false ? P : never]?: S[P]["v"] }
 
-interface Class<S extends Schema> {
-  new(fields:In<S>):Out<S>
-}
+export type Class<S extends Schema> = new(fields:In<S>)=>Out<S>
+// export interface Class<S extends Schema> {
+//   new(fields:In<S>):Out<S>
+// }
 
 interface Metadata<S extends Schema> {
   cls: Class<S>
   fields: Fields<S>
   sample: Out<S>
 }
-
-const classMap = new Map<Class<any>,Metadata<any>>()
 
 export const define = <S extends Schema>(schema:S):Base&Class<S> => {
   type K = keyof S
@@ -349,7 +348,6 @@ export const define = <S extends Schema>(schema:S):Base&Class<S> => {
   const cls = class extends Base {
     constructor(input:InputJSON) {
       super();
-      (this as any)[clsSym] = (cls.prototype as any)[symbol].cls
       if (unsafe) {
         Object.assign(this, input)
       } else {
@@ -357,6 +355,8 @@ export const define = <S extends Schema>(schema:S):Base&Class<S> => {
         if (!r.success) throw new CheckError(r.fail)
         Object.assign(this, r.result)
       }
+      const result = augment(this)
+      return result
     }
   }
   const metadata:Metadata<S> = { 
@@ -387,7 +387,6 @@ export const sample = <R extends Base,T extends object>(cls:new(fields:T)=>R):R 
       sample: newSample
     };
     cls.prototype[symbol] = newMD;
-    (newSample as any)[clsSym] = cls
     return newSample
   }
   return md.sample as R
@@ -396,13 +395,8 @@ export const sample = <R extends Base,T extends object>(cls:new(fields:T)=>R):R 
 export const recurse = <R extends Base,T extends object,K extends keyof R>(cls:new(fields:T)=>R, key:K, value:R[K]) => {
   const s = sample(cls)
   s[key] = value
-  console.log("key", key)
-  console.log("value", value)
-  console.log("result", s)
-  console.log("???", s[key] === s)
 }
 
-// TODO: Make this maximal
 const run2 = <S extends Schema,T extends Out<S>>(cls:Class<S>, objectPrefix:string, json:InputJSON):Success<T>|Failure => {
   type K = keyof T
   if (objectPrefix !== "") objectPrefix += "."
@@ -418,8 +412,7 @@ const run2 = <S extends Schema,T extends Out<S>>(cls:Class<S>, objectPrefix:stri
     if (prop.required !== false) {
       if (value === undefined || value === null) {
         if (prop.required === "default") {
-          // TODO, should the type handle this?
-          value = Array.isArray(sampleValue) ? [] : sampleValue
+          value = field.type.defaultTo(sampleValue)
         } else {
           return { success:false, fail: new Fail(prefix, REQ, "missing required property") }
         }
@@ -479,6 +472,13 @@ export const runOne = <S extends Schema,T extends Out<S>,K extends keyof T>(cls:
   return field!.check(v as never)
 }
 
+type O = Record<string,any>
+
+let augment:(o:O)=>O = o => o
+
+export const augmentWith = (f:(o:O)=>O) => {
+  augment = f
+}
 
 let warn:(message:string)=>void = console.warn
 

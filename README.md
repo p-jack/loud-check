@@ -5,23 +5,26 @@
 ```typescript
 import { Check } from "loudo-check"
 
-const userSchema = Check.define({
-  id: { v:"A18C978A-7A2C-4EA4-BBFF-75C1EF30FCC3", min:36, max:36 },
+class User extends Check.define({
+  id: { v:1, min:1 },
   email:{ v:"fake@example.com", regex:/[a-z0-9]+@[a-z]+\.[a-z]{2,3}/ },
   name:{ v:"Reba", min:1, max:100 }
-})
-
-type User = typeof userSchema
+}) {}
 
 const inputJSON = `
 {
-  "id":"1234",
+  "id":1234,
   "email":"fake@example.com",
   "name":"Flugelhorn"
 }
 `
 
-const user = Check.parse(userSchema, inputJSON)
+const user = Check.parse(User, inputJSON)
+const user2 = new User({
+  id:1234,
+  "email":"fake@example.com",
+  "name":"Flugelhorn",
+})
 ```
 
 ## Defining Checks
@@ -56,57 +59,10 @@ and the checks for that property.
   must be a safe integer. If unspecified, it defaults to true.
   If false, then real numbers, NaN, and infinities are allowed.
 
-`Check.define` results in an object that consists of all the 
-defined properties, with their values initialized to the `v` 
-fields of those properties. That is a _schema object_. You can
-pass the schema to `Check.parse` to parse a JSON string, raising
-an error if the object in the JSON does not pass the checks defined
-in the sample. You can also use `Check.run` to test an object
-against the schema, retrieving any failures without raising an error.
+`Check.define` results in a class that consists of all the 
+defined properties. You can use the class to directly construct
+instances, but the constructor will raise a `CheckError` if any
+of the checks you defined on the properties fail.
 
-## Extending Schema Objects
-
-It's sometimes useful to define additional getter properties or
-helper functions on a schema object, and to have those extensions 
-propagate to any object created via `Check.parse`.
-
-### Adding Getters
-
-You can use `Check.getters` to define getter functions:
-
-```typescript
-const schema = Check.define({
-  x: { v:0 },
-  y: { v:0 }
-})
-
-Check.getters(schema, {
-  sum: (o) => { return o.x + o.y },
-  min: (o) => { return Math.min(o.x, o.y) }
-})
-
-const obj = Check.parse(schema, `{"x":11, "y":22}`)
-console.log(obj.sum) // 33
-console.log(obj.min) // 11
-```
-
-Note that even though you define the getters as _functions_,
-they become _properties_ during the parse.
-
-### Adding Functions
-
-You can use `Check.extend` to add functions:
-
-```typescript
-const schema = Check.define({
-  x: { v:0 },
-  y: { v:0 }
-})
-
-Check.extend(schema, {
-  plus:(o, n:number => { return o.x + o.y + n }
-})
-
-const obj = Check.parse(schema, `{"x":11, "y":22}`)
-console.log(obj.plus(10)) // 43
-```
+You can also pass the class to `Check.run` to see if checks would
+pass on input values, or to `Check.parse` to parse json.

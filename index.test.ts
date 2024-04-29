@@ -14,6 +14,7 @@ beforeEach(() => {
 
 afterEach(() => {
   Check.warnWith(console.warn)
+  Check.augmentWith(o => o)
 })
 
 describe("required", ()=>{
@@ -227,14 +228,12 @@ describe("nested arrays", () => {
       public get nn() { return this.n + this.n }
     }
     const sampleElement = Check.sample(Element)
-    console.log("SAMPLE ELEMENT", sampleElement, Element)
     const cls = Check.define({ a:{ v:[sampleElement] }})
     const good1 = { a:[] }
     Check.raise(cls, good1)
     const good2 = { a:[{ n:11 }, { n:22 }, { n:33 }]}
     const x = Check.raise(cls, good2)
     expect(x.a[0]?.n).toBe(11)
-    console.log(x)
     expect(x.a[0]?.nn).toBe(22)
     const bad1 = { a:[1,2,3] }
     expect(() => { Check.raise(cls, bad1)}).toThrow("a[0]: expected object but got number")
@@ -322,6 +321,7 @@ test("types", () => {
     name:"bigint",
     priority:500_000_000,
     appliesTo:(v:unknown) => typeof(v) === "bigint",
+    defaultTo:(sample:BigInt) => sample,
     mismatch:(json:unknown) => {
       if (typeof(json) !== "string") return `expected bigint string but got ${typeof(json)}`
     },
@@ -340,14 +340,22 @@ test("types", () => {
   expect(()=>{ Check.raise(C, {n:"xxx"})}).toThrow("n: Cannot convert xxx to a BigInt")
 })
 
-test("hasProp", () => {
-  class C1 extends Check.define({
-    n: { v:0 }
-  }) {
-    length() {
-      throw new Error()
+test("augment", () => {
+  let target:any = null
+  let key:string|symbol = ""
+  let value:any = null
+  Check.augmentWith(o => new Proxy(o, {
+    set:(t, k, v) => {
+      target = t
+      key = k
+      value = v
+      return true
     }
-  }
-  class C2 extends Check.define({o:{v:Check.sample(C1)}}) {}
-  const o = Check.raise(C2, {o:{n:1}})
+  }))
+  class C extends Check.define({n:{v:0}}) {}
+  const instance = new C({n:0})
+  instance.n = 5
+  expect(key).toBe("n")
+  expect(value).toBe(5)
+  expect(target).toStrictEqual(instance)
 })

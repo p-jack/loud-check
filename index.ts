@@ -290,16 +290,12 @@ const toFunction = <T>(name:string, p:Property<T>):(value:T)=>Fail[] => {
   const sample = p.v
   const opt = optimize(name, sample, p)
   const passes = opt.passes
-  passes.forEach(x => x(sample))
   if (opt.required !== false) {
     return (value:T) => {
       return passes.map(f => f(value)).filter(x => x !== undefined) as never
     }
   } else {
     return (value:T) => {
-      if ((value === undefined) || (value === null)) {
-        return []
-      }
       return passes.map(f => f(value)).filter(x => x !== undefined) as never
     }
   }
@@ -322,9 +318,6 @@ export type Out<S extends Schema> =
 & { [P in keyof S as HasOut<S,P> extends false ? P : never]?: S[P]["v"] }
 
 export type Class<S extends Schema> = new(fields:In<S>)=>Out<S>
-// export interface Class<S extends Schema> {
-//   new(fields:In<S>):Out<S>
-// }
 
 interface Metadata<S extends Schema> {
   cls: Class<S>
@@ -410,8 +403,12 @@ const run2 = <S extends Schema,T extends Out<S>>(cls:Class<S>, objectPrefix:stri
       const prop = field.property
       const sampleValue = sample[k]
       let value = json[k]
+      const missing = value === undefined || value === null
+      if (prop.required === false && missing) {
+        continue
+      } 
       if (prop.required !== false) {
-        if (value === undefined || value === null) {
+        if (missing) {
           if (prop.required === "default") {
             value = field.type.defaultTo(sampleValue)
           } else {
@@ -424,12 +421,10 @@ const run2 = <S extends Schema,T extends Out<S>>(cls:Class<S>, objectPrefix:stri
           value = prop.fallback
         }
       }
-      if (!(prop.required === false && (value === undefined || value === null))) {
-        const mm = field.type.mismatch(value, sampleValue)
-        if (mm !== undefined) {
-          return { success:false, fail:new Fail(prefix, TYPE, mm) }
-        }  
-      }
+      const mm = field.type.mismatch(value, sampleValue)
+      if (mm !== undefined) {
+        return { success:false, fail:new Fail(prefix, TYPE, mm) }
+      }  
       const fails = field.check(value as never)
       if (fails.length > 0) {
         return { success:false, fail:fails[0]!.withPrefix(prefix) }

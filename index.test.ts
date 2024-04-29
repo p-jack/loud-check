@@ -267,6 +267,12 @@ describe("nested arrays", () => {
     ]})
     expect(r2.a.length).toBe(0)
   })
+  test("not required", () => {
+    class C2 extends Check.define({n:{v:0}}) {}
+    class C1 extends Check.define({a:{v:[Check.sample(C2)], required:false}}) {}
+    const o1 = Check.raise(C1, {})
+    expect(o1.a).toBeUndefined()
+  })
 })
 
 test("runOne", () => {

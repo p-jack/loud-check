@@ -405,41 +405,46 @@ const run2 = <S extends Schema,T extends Out<S>>(cls:Class<S>, objectPrefix:stri
   const result:InputJSON = {}
   for (const k in md.fields) {
     const prefix = objectPrefix + k
-    const field = md.fields[k]
-    const prop = field.property
-    const sampleValue = sample[k]
-    let value = json[k]
-    if (prop.required !== false) {
-      if (value === undefined || value === null) {
-        if (prop.required === "default") {
-          value = field.type.defaultTo(sampleValue)
-        } else {
-          return { success:false, fail: new Fail(prefix, REQ, "missing required property") }
+    try {
+      const field = md.fields[k]
+      const prop = field.property
+      const sampleValue = sample[k]
+      let value = json[k]
+      if (prop.required !== false) {
+        if (value === undefined || value === null) {
+          if (prop.required === "default") {
+            value = field.type.defaultTo(sampleValue)
+          } else {
+            return { success:false, fail: new Fail(prefix, REQ, "missing required property") }
+          }
         }
       }
-    }
-    if (prop.allowed !== undefined && prop.fallback !== undefined) {
-      if (prop.allowed.indexOf(value as never) < 0) {
-        value = prop.fallback
+      if (prop.allowed !== undefined && prop.fallback !== undefined) {
+        if (prop.allowed.indexOf(value as never) < 0) {
+          value = prop.fallback
+        }
       }
-    }
-    if (!(prop.required === false && (value === undefined || value === null))) {
-      const mm = field.type.mismatch(value, sampleValue)
-      if (mm !== undefined) {
-        return { success:false, fail:new Fail(prefix, TYPE, mm) }
-      }  
-    }
-    const fails = field.check(value as never)
-    if (fails.length > 0) {
-      return { success:false, fail:fails[0]!.withPrefix(prefix) }
-    }
-    const r = field.type.parse(prefix, sampleValue, value)
-    if (r.success) {
-      result[k] = r.result
-    } else if (sampleValue instanceof Base && prop.required === false) {
-      warn(`skipping nested object ${r.fail.prefix} - ${r.fail.message}`)
-    } else {
-      return r
+      if (!(prop.required === false && (value === undefined || value === null))) {
+        const mm = field.type.mismatch(value, sampleValue)
+        if (mm !== undefined) {
+          return { success:false, fail:new Fail(prefix, TYPE, mm) }
+        }  
+      }
+      const fails = field.check(value as never)
+      if (fails.length > 0) {
+        return { success:false, fail:fails[0]!.withPrefix(prefix) }
+      }
+      const r = field.type.parse(prefix, sampleValue, value)
+      if (r.success) {
+        result[k] = r.result
+      } else if (sampleValue instanceof Base && prop.required === false) {
+        warn(`skipping nested object ${r.fail.prefix} - ${r.fail.message}`)
+      } else {
+        return r
+      }
+    } catch (e:any) {
+      const msg = "message" in e ? e.message : "unknown error"
+      return { success:false, fail:new Fail(prefix, UNKNOWN, e.message) }
     }
   }
   unsafe = true

@@ -359,3 +359,17 @@ test("augment", () => {
   expect(value).toBe(5)
   expect(target).toStrictEqual(instance)
 })
+
+test("extensions", () => {
+  class C extends Check.define({n:{v:0}}) { get plus1() { return this.n + 1}}
+  const r = Check.run(C, {n:100})
+  expect(r.success).toBe(true)
+  if (r.success) {
+    const o:C = r.result
+    expect(o.n).toBe(100)
+    expect(o.plus1).toBe(101)
+  }
+  const o = Check.raise(C, {n:200})
+  expect(o.n).toBe(200)
+  expect(o.plus1).toBe(201)
+})

@@ -448,18 +448,18 @@ const run2 = <S extends Schema,T extends Out<S>>(cls:Class<S>, objectPrefix:stri
   return { success:true, result:r as T }
 }
 
-export const run = <S extends Schema,T extends Out<S>>(cls:Class<S>, json:InputJSON):Success<T>|Failure => {
-  return run2(cls, "", json)
+export const run = <R extends Base,T extends object>(cls:new(fields:T)=>R, json:InputJSON):Success<R>|Failure => {
+  return run2(cls as never, "", json)
 }
 
-export const raise = <S extends Schema,T extends Out<S>>(cls:Class<S>, json:InputJSON):T => {
-  const r = run<S,T>(cls, json)
+export const raise = <R extends Base,T extends object>(cls:new(fields:T)=>R, json:InputJSON):R => {
+  const r = run(cls, json)
   if (r.success) return r.result
   throw new CheckError(r.fail)
 }
 
-export const parse = <S extends Schema,T extends Out<S>>(cls:Class<S>, json:string):T => {
-  const r = run<S,T>(cls, JSON.parse(json))
+export const parse = <R extends Base,T extends object>(cls:new(fields:T)=>R, json:string):R => {
+  const r = run(cls, JSON.parse(json))
   if (r.success) {
     return r.result
   } else {
@@ -467,8 +467,8 @@ export const parse = <S extends Schema,T extends Out<S>>(cls:Class<S>, json:stri
   }
 }
 
-export const runOne = <S extends Schema,T extends Out<S>,K extends keyof T>(cls:Class<S>, object:T, k:K, v:T[K]):Fail[] => {
-  const field = metadata<S,Class<S>>(cls).fields[k as never]
+export const runOne = <R extends Base,T extends object,K extends keyof R>(cls:new(fields:T)=>R, object:R, k:K, v:R[K]):Fail[] => {
+  const field = metadata(cls as never).fields[k as never]
   return field!.check(v as never)
 }
 

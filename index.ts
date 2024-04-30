@@ -357,7 +357,7 @@ export const define = <S extends Schema>(schema:S):Base&Class<S> => {
     sample: null as never,
     cls: cls as never,
   };
-  (cls.prototype as any)[symbol] = metadata
+  (cls as any)[symbol] = metadata
   unsafe = true
   metadata.sample = new cls(sample) as never
   unsafe = false;
@@ -365,12 +365,12 @@ export const define = <S extends Schema>(schema:S):Base&Class<S> => {
 }
 
 const metadata = <S extends Schema,C extends Class<S>>(cls:C):Metadata<S> => {
-  return cls.prototype[symbol]
+  return (cls as any)[symbol]
 }
 
 export const sample = <R extends Base,T extends object>(cls:new(fields:T)=>R):R => {
   const md = metadata(cls as never)
-  if (!cls.prototype.hasOwnProperty(symbol)) {    
+  if (!cls.hasOwnProperty(symbol)) {
     unsafe = true
     const newSample = new cls(md.sample as never)
     unsafe = false
@@ -379,7 +379,7 @@ export const sample = <R extends Base,T extends object>(cls:new(fields:T)=>R):R 
       fields: md.fields,
       sample: newSample
     };
-    cls.prototype[symbol] = newMD;
+    (cls as any)[symbol] = newMD;
     return newSample
   }
   return md.sample as R

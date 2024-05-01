@@ -166,6 +166,7 @@ type Required = true | false | "default"
 export interface Property<T> {
   v:T
   required?:Required
+  readonly?:boolean
   min?:Limit<T>
   max?:Limit<T>
   allowed?:readonly T[]
@@ -310,12 +311,16 @@ export type In<S extends Schema> =
   { [P in keyof S as HasIn<S,P> extends true  ? P : never]:  S[P]["v"] }
 & { [P in keyof S as HasIn<S,P> extends false ? P : never]?: S[P]["v"] }
 
-type HasOut<S extends Schema,P extends keyof S> = 
-  S[P]["required"] extends false ? false : true
+type OutKeyType<S extends Schema,P extends keyof S> =
+  S[P]["required"] extends false
+  ? S[P]["readonly"] extends true ? "io" : "mo"
+  : S[P]["readonly"] extends true ? "ir" : "mr"
 
 export type Out<S extends Schema> = 
-  { [P in keyof S as HasOut<S,P> extends true  ? P : never]:  S[P]["v"] }
-& { [P in keyof S as HasOut<S,P> extends false ? P : never]?: S[P]["v"] }
+  { [P in keyof S as OutKeyType<S,P> extends "mr" ? P : never]:  S[P]["v"] }
+& { [P in keyof S as OutKeyType<S,P> extends "mo" ? P : never]?: S[P]["v"] }
+& { readonly [P in keyof S as OutKeyType<S,P> extends "ir" ? P : never]:  S[P]["v"] }
+& { readonly [P in keyof S as OutKeyType<S,P> extends "io" ? P : never]?: S[P]["v"] }
 
 export type Class<S extends Schema> = new(fields:In<S>)=>Out<S>
 

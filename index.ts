@@ -71,10 +71,17 @@ const typeOf = (v:unknown) => {
   return typeof(v)
 }
 
-const types:Type<any>[] = [
-  {
-    name: "array",
-    priority:300_000_000,
+interface Collection<T> {
+  name:string
+  make():T
+  add(collection:T, v:unknown):void
+  sampleElement(sampleCollection:T):unknown
+}
+
+export const collectionType = <T>(c:Collection<T>):Type<T> => {
+  return {
+    name: c.name,
+    priority: 400_000_000,
     appliesTo:(v:unknown) => Array.isArray(v),
     defaultTo:() => [],
     mismatch:(json:unknown) => {
@@ -82,11 +89,11 @@ const types:Type<any>[] = [
         return "expected array but got " + typeOf(json)
       }
     },
-    parse:(prefix:string, sample:unknown, json:unknown) => {
+    parse:(prefix:string, sample:T, json:unknown) => {
       const a = json as any[]
-      const sampleElement = (sample as unknown[])[0]
+      const sampleElement = c.sampleElement(sample)
       const type = types.find(x => x.appliesTo(sampleElement))!
-      const result:unknown[] = []
+      const result = c.make()
       for (let i = 0; i < a.length; i++) {
         const mm = type.mismatch(a[i], sampleElement)
         if (mm) {
@@ -96,19 +103,31 @@ const types:Type<any>[] = [
           const cls = sampleElement.constructor
           const r = run2(cls as never, prefix + "[" + i + "]", a[i])
           if (r.success) {
-            result.push(r.result)
+            c.add(result, r.result)
           } else if (skip) {
             warn(`skipping element ${r.fail.prefix} - ${r.fail.message}`)
           } else {
             return r
           }
         } else {
-          result.push(type.parse(prefix, sampleElement, a[i]))
+          c.add(result, type.parse(prefix, sampleElement, a[i]))
         }
       }
       return { success:true, result }
     }
-  },
+  }
+}
+
+const arrayType = collectionType<Array<unknown>>({
+  name: "array",
+  make: () => [],
+  add: (a:unknown[], v:unknown) => a.push(v),
+  sampleElement: (c:unknown[]) => c[0]
+})
+arrayType.priority = 300_000_000
+
+const types:Type<any>[] = [
+  arrayType,
   {
     name:"checked object",
     priority:200_000_000,

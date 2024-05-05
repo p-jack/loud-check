@@ -40,6 +40,13 @@ describe("required", ()=>{
     expect(result.p).toBe("xyzzy")
     Check.raise(cls, {p:""})
   })
+  test("default object", ()=>{
+    const cls1 = Check.define({s:{v:"xyzzy"}})
+    const cls2 = Check.define({o:{v:Check.sample(cls1), required:"default"}})
+    const result = Check.raise(cls2, {})
+    expect(result.o.s).toBe("xyzzy")
+    Check.raise(cls2, {o:{s:"qworp"}})
+  })
   test("default array", ()=>{
     const cls = Check.define({p:{v:[0], required:"default"}})
     const result = Check.raise(cls, {})
@@ -286,10 +293,16 @@ test("runOne", () => {
 })
 
 test("parse", () => {
-  const cls = Check.define({p:{v:""}})
-  const r = Check.parse(cls, '{"p":"s"}')
-  expect(r.p).toBe("s")
-  expect(()=>{ Check.parse(cls, '{"p":0}')}).toThrow("p: expected string but got number")
+  class E extends Check.define({p:{v:""}}) {}
+  const e = Check.parse(E, '{"p":"s"}')
+  expect(e.p).toBe("s")
+  expect(()=>{ Check.parse(E, '{"p":0}')}).toThrow("p: expected string but got number")
+  class A extends Check.define({a:{v:[new E({p:""})]}}) {}
+  const a = Check.parse(A, '{"a":[{"p":"s"}]}')
+  expect(a.a.length).toBe(1)
+  expect(a.a[0]?.p).toBe("s")
+  expect(E === e.constructor).toBe(true)
+  expect(a.constructor === A).toBe(true)
 })
 
 test("mismatches", () => {

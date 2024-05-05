@@ -373,6 +373,7 @@ export const define = <S extends Schema>(schema:S):Base&Class<S> => {
         Object.assign(this, r.result)
       }
       const result = augment(this)
+      /* v8 ignore next */
       return result
     }
   }
@@ -461,6 +462,7 @@ const run2 = <S extends Schema,T extends Out<S>>(cls:Class<S>, objectPrefix:stri
       } else {
         return r
       }
+      /* v8 ignore next 4 */
     } catch (e:any) {
       const msg = "message" in e ? e.message : "unknown error"
       return { success:false, fail:new Fail(prefix, UNKNOWN, e.message) }

@@ -27,7 +27,7 @@ export interface Type<T> {
   priority:number
   appliesTo(sample:unknown):boolean
   defaultTo(sample:T):unknown
-  mismatch(json:unknown, sample:unknown):string|undefined
+  mismatch(json:unknown, sample:unknown):string|boolean
   parse(prefix:string, sample:T, json:unknown):Success<T>|Failure
 }
 
@@ -86,9 +86,11 @@ export const collectionType = <T>(c:Collection<T>):Type<T> => {
     appliesTo:(v:unknown) => c.appliesTo(v),
     defaultTo:() => c.make(),
     mismatch:(json:unknown) => {
+      if (c.name !== "array" && c.appliesTo(json)) return true
       if (!Array.isArray(json)) {
         return "expected array but got " + typeOf(json)
       }
+      return false
     },
     parse:(prefix:string, sample:T, json:unknown) => {
       const a = json as any[]
@@ -97,7 +99,7 @@ export const collectionType = <T>(c:Collection<T>):Type<T> => {
       const result = c.make()
       for (let i = 0; i < a.length; i++) {
         const mm = type.mismatch(a[i], sampleElement)
-        if (mm) {
+        if (typeof(mm) === "string") {
           return { success:false, fail:new Fail(prefix + "[" + i + "]", TYPE, mm)}
         }
         if (sampleElement instanceof Base) {
@@ -137,10 +139,12 @@ const types:Type<any>[] = [
     appliesTo:(v:unknown) => v instanceof Base,
     defaultTo:(sample:unknown) => sample,
     mismatch:(json:unknown) => {
+      if (json instanceof Base) return true
       const t = typeOf(json)
       if (t !== "object") {
         return "expected object but got " + t
       }
+      return false
     },
     parse:(prefix:string, sample:unknown, json:unknown) => {
       const cls = (sample as Base).constructor
@@ -159,6 +163,7 @@ const types:Type<any>[] = [
       if (expected !== got) {
         return `expected ${expected} but got ${got}`
       }
+      return false
     },
     parse:(prefix:string, sample:unknown, json:unknown) => {
       return { success:true, result:json }
@@ -176,10 +181,15 @@ interface Length {
   length:number
 }
 
+interface Size {
+  size:number
+}
+
 type Limit<T> = 
 T extends number ? number :
 T extends BigInt ? BigInt :
 T extends Length ? number :
+T extends Size ? number :
 T extends Date ? Date :
 undefined
 
@@ -209,6 +219,9 @@ interface Optimized<T> {
 export type Checker<T> = (v:T)=>Fail|undefined
 
 const hasProp = (value:any, prop:string):boolean => {
+  if (value instanceof Set) {
+    console.log("hasProp", prop, prop in value)
+  }
   return typeof(value) === "object" && prop in value 
 }
 
@@ -221,6 +234,15 @@ const minChecker = <T>(name:string, sample:T, min:Limit<T>|undefined):Checker<T>
       const length = (value as Length).length
       if (length < (min as number)) {
         return new Fail(name, MIN, `length of ${length} < minimum length of ${min}`)
+      }
+    }
+  }
+  if (hasProp(sample, "size")) {
+    return (value:T) => {
+      const size = Array.isArray(value) ? value.length : (value as Size).size
+      console.log("minCheck", value, size, min)
+      if (size < (min as number)) {
+        return new Fail(name, MIN, `size of ${size} < minimum size of ${min}`)
       }
     }
   }
@@ -240,6 +262,14 @@ const maxChecker = <T>(name:string, sample:T, max:Limit<T>|undefined):Checker<T>
       const length = (value as Length).length
       if (length > (max as number)) {
         return new Fail(name, MAX, `length of ${length} > maximum length of ${max}`)
+      }
+    }
+  }
+  if (hasProp(sample, "size")) {
+    return (value:T) => {
+      const size = Array.isArray(value) ? value.length : (value as Size).size
+      if (size > (max as number)) {
+        return new Fail(name, MAX, `size of ${size} > maximum size of ${max}`)
       }
     }
   }
@@ -451,12 +481,16 @@ const run2 = <S extends Schema,T extends Out<S>>(cls:Class<S>, objectPrefix:stri
         }
       }
       const mm = field.type.mismatch(value, sampleValue)
-      if (mm !== undefined) {
+      if (typeof(mm) === "string") {
         return { success:false, fail:new Fail(prefix, TYPE, mm) }
-      }  
+      }
       const fails = field.check(value as never)
       if (fails.length > 0) {
         return { success:false, fail:fails[0]!.withPrefix(prefix) }
+      }
+      if (mm) {
+        result[k] = value
+        continue
       }
       const r = field.type.parse(prefix, sampleValue, value)
       if (r.success) {

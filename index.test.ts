@@ -8,6 +8,15 @@ import {
   test,
 } from 'vitest'
 
+const setType = Check.collectionType({
+  name: "test",
+  make: () => new Set<unknown>(),
+  appliesTo: x => x instanceof Set,
+  add: (set:Set<unknown>, v:unknown) => { set.add(v) },
+  sampleElement: set => set.values().next().value
+})
+Check.addType(setType)
+
 beforeEach(() => {
   Check.skipInvalidObjects(false)
 })
@@ -94,6 +103,11 @@ describe("min", ()=>{
     Check.raise(cls, {v:"1234567890A"})
     Check.raise(cls, {v:"1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ"})
   })
+  test("set (size)", () => {
+    const cls = Check.define({set:{ v:new Set([0]), min:1}})
+    expect(() => {Check.raise(cls, {set:[]})}).toThrow("set: size of 0 < minimum size of 1")
+    expect(() => {new cls({set:new Set([])})}).toThrow("set: size of 0 < minimum size of 1")
+  })
 })
 
 describe("max", ()=>{
@@ -123,6 +137,11 @@ describe("max", ()=>{
     Check.raise(cls, {v:"123"})
     Check.raise(cls, {v:"12"})
     Check.raise(cls, {v:""})
+  })
+  test("set (size)", () => {
+    const cls = Check.define({set:{ v:new Set([0]), max:1}})
+    expect(() => {Check.raise(cls, {set:[1, 2]})}).toThrow("set: size of 2 > maximum size of 1")
+    expect(() => {new cls({set:new Set([1,2])})}).toThrow("set: size of 2 > maximum size of 1")
   })
 })
 
@@ -367,6 +386,7 @@ test("types", () => {
     defaultTo:(sample:BigInt) => sample,
     mismatch:(json:unknown) => {
       if (typeof(json) !== "string") return `expected bigint string but got ${typeof(json)}`
+      return false
     },
     parse:(prefix:string, sample:unknown, json:unknown) => {
       try {
@@ -384,14 +404,6 @@ test("types", () => {
 })
 
 test("collection type resolution", () => {
-  const setType = Check.collectionType({
-    name: "test",
-    make: () => new Set<unknown>(),
-    appliesTo: x => x instanceof Set,
-    add: (set:Set<unknown>, v:unknown) => { set.add(v) },
-    sampleElement: set => set.values().next().value
-  })
-  Check.addType(setType)
   class A extends Check.define({a:{v:[0]}}) {}
   const a = Check.raise(A, {a:[11,22,33]})
   expect(a.a[0]).toBe(11)
@@ -403,6 +415,10 @@ test("collection type resolution", () => {
   expect(s.s.has(11)).toBe(true)
   expect(s.s.has(22)).toBe(true)
   expect(s.s.has(33)).toBe(true)
+  const set = new Set([111,222,333])
+  const s1 = new S({s:set})
+  expect(set === s1.s).toBe(true)
+
 })
 
 test("augment", () => {

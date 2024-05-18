@@ -218,13 +218,26 @@ describe("nested objects", () => {
     const bad = { o: { s: "" } }
     expect(() => { Check.raise(cls1, bad) }).toThrow("o.s: length of 0 < minimum length of 1")
   })
+  test("already checked", () => {
+    const cls2 = Check.define({ s:{v:"1", min:1 }})
+    const cls1 = Check.define({ o:{v:Check.sample(cls2) }})
+    const o2 = new cls2({s:"22"})
+    const o1a = new cls1({o:o2})
+    expect(o1a.o === o2).toBe(true)
+    const o1b = new cls1(o1a)
+    expect(o1b.o === o2).toBe(true)
+  })
 })
 
 describe("nested arrays", () => {
   test("primitive elements", () => {
     const cls = Check.define({ a:{ v:[""] } })
     const good1 = { a:["1", "2", "3"] }
-    Check.raise(cls, good1)
+    const parsed1 = Check.raise(cls, good1)
+    expect(parsed1.a.length).toBe(3)
+    expect(parsed1.a[0]).toBe("1")
+    expect(parsed1.a[1]).toBe("2")
+    expect(parsed1.a[2]).toBe("3")
     const good2 = { a:[] }
     Check.raise(cls, good2)
     const bad = { a:[1, 2, 3] }
@@ -305,6 +318,17 @@ test("parse", () => {
   expect(a.constructor === A).toBe(true)
 })
 
+test("parseArray", () => {
+  class C extends Check.define({n:{v:0, min:0}}) {}
+  const a = Check.parseArray(C, `[{"n":11},{"n":22},{"n":33}]`)
+  expect(a.length).toBe(3)
+  expect(a[0]!.n).toBe(11)
+  expect(a[1]!.n).toBe(22)
+  expect(a[2]!.n).toBe(33)
+  expect(() => { Check.parseArray(C, `[{"n":-1}]`)}).toThrow("minimum value")
+  expect(() => { Check.parseArray(C, `{}`)}).toThrow("expected input array but got object")
+})
+
 test("mismatches", () => {
   const cls1 = Check.define({a:{v:[""]}})
   expect(()=>{ Check.raise(cls1, {a:""})}).toThrow("a: expected array but got string")
@@ -357,6 +381,28 @@ test("types", () => {
   const o = Check.raise(C, {n:"101"})
   expect(o.n).toBe(BigInt(101))
   expect(()=>{ Check.raise(C, {n:"xxx"})}).toThrow("n: Cannot convert xxx to a BigInt")
+})
+
+test("collection type resolution", () => {
+  const setType = Check.collectionType({
+    name: "test",
+    make: () => new Set<unknown>(),
+    appliesTo: x => x instanceof Set,
+    add: (set:Set<unknown>, v:unknown) => { set.add(v) },
+    sampleElement: set => set.values().next().value
+  })
+  Check.addType(setType)
+  class A extends Check.define({a:{v:[0]}}) {}
+  const a = Check.raise(A, {a:[11,22,33]})
+  expect(a.a[0]).toBe(11)
+  expect(a.a[1]).toBe(22)
+  expect(a.a[2]).toBe(33)
+  class S extends Check.define({s:{v: new Set([0])}}) {}
+  const s = Check.raise(S, {s:[11,22,33]})
+  expect(s.s).toBeInstanceOf(Set)
+  expect(s.s.has(11)).toBe(true)
+  expect(s.s.has(22)).toBe(true)
+  expect(s.s.has(33)).toBe(true)
 })
 
 test("augment", () => {

@@ -74,6 +74,7 @@ const typeOf = (v:unknown) => {
 interface Collection<T> {
   name:string
   make():T
+  appliesTo(v:unknown):boolean
   add(collection:T, v:unknown):void
   sampleElement(sampleCollection:T):unknown
 }
@@ -82,8 +83,8 @@ export const collectionType = <T>(c:Collection<T>):Type<T> => {
   return {
     name: c.name,
     priority: 400_000_000,
-    appliesTo:(v:unknown) => Array.isArray(v),
-    defaultTo:() => [],
+    appliesTo:(v:unknown) => c.appliesTo(v),
+    defaultTo:() => c.make(),
     mismatch:(json:unknown) => {
       if (!Array.isArray(json)) {
         return "expected array but got " + typeOf(json)
@@ -110,7 +111,8 @@ export const collectionType = <T>(c:Collection<T>):Type<T> => {
             return r
           }
         } else {
-          c.add(result, type.parse(prefix, sampleElement, a[i]))
+          const r = type.parse(prefix + "[" + i + "]", sampleElement, a[i])
+          if (r.success) c.add(result, r.result)
         }
       }
       return { success:true, result }
@@ -120,9 +122,10 @@ export const collectionType = <T>(c:Collection<T>):Type<T> => {
 
 const arrayType = collectionType<Array<unknown>>({
   name: "array",
+  appliesTo: (v:unknown) => Array.isArray(v),
   make: () => [],
   add: (a:unknown[], v:unknown) => a.push(v),
-  sampleElement: (c:unknown[]) => c[0]
+  sampleElement: (c:unknown[]) => c[0],
 })
 arrayType.priority = 300_000_000
 
@@ -416,6 +419,7 @@ export const recurse = <R extends Base,T extends object,K extends keyof R>(cls:n
 }
 
 const run2 = <S extends Schema,T extends Out<S>>(cls:Class<S>, objectPrefix:string, json:InputJSON):Success<T>|Failure => {
+  if (json instanceof Base) return { success:true, result:json as T }
   type K = keyof T
   if (objectPrefix !== "") objectPrefix += "."
   const md = metadata<S,Class<S>>(cls)
@@ -491,6 +495,24 @@ export const parse = <R extends Base,T extends object>(cls:new(fields:T)=>R, jso
   } else {
     throw new CheckError(r.fail)
   }
+}
+
+export const parseCollection = <R extends Base,T extends object>(cls:new(fields:T)=>R, json:string, sink:(element:R)=>void):void => {
+  const a = JSON.parse(json)
+  if (!Array.isArray(a)) {
+    throw new TypeError("expected input array but got " + typeof(a))
+  }
+  for (const x of a) {
+    const r = run(cls, x)
+    if (r.success) sink(r.result)
+    else throw new CheckError(r.fail)
+  }
+}
+
+export const parseArray = <R extends Base,T extends object>(cls:new(fields:T)=>R, json:string) => {
+  const result:R[] = []
+  parseCollection(cls, json, x => { result.push(x) })
+  return result
 }
 
 export const runOne = <R extends Base,T extends object,K extends keyof R>(cls:new(fields:T)=>R, object:R, k:K, v:R[K]):Fail[] => {

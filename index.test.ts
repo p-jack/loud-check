@@ -262,6 +262,16 @@ describe("nested arrays", () => {
     const bad = { a:[1, 2, 3] }
     expect(() => { Check.raise(cls, bad)}).toThrow("a[0]: expected string but got number")
   })
+  test("deep nest", () => {    
+    class c1 extends Check.define({ a:{ v:[0], min:3, max:3 }}) {}
+    const o1 = new c1({a:[11,22,33]})
+    class c2 extends Check.define({ o:{ v:Check.sample(c1)}}) {}
+    const o2 = new c2({o:o1})
+    expect(o2.o.a.length).toBe(3)
+    expect(o2.o.a[0]).toBe(11)
+    expect(o2.o.a[1]).toBe(22)
+    expect(o2.o.a[2]).toBe(33)
+  })
   test("object elements", () => {
     class Element extends (Check.define({ n: { v:1, min:1 }})) {
       public get nn() { return this.n + this.n }
@@ -362,20 +372,29 @@ test("constructors", () => {
   expect(()=>{ new C({n:0})}).toThrow("n: value of 0 < minimum value of 1")
 })
 
-test("recursive data type", () => {
-  interface Node {
-    value:string
-    next?:Node
+test("recursive data types", () => {
+  interface BarI {
+    bar: number
+    foo?: Foo
+    plusOne: number
+    add(x:number):number
   }
-  class NodeClass extends Check.define({
-    value: { v:"xxx" },
-    next: { v:null as unknown as Node, required:false },
+  class Foo extends Check.define({
+    foo: { v:0 },
+    bar: { v:null as unknown as BarI, required:false }
   }) {}
-  Check.recurse(NodeClass, "next", Check.sample(NodeClass))
-  const sample = Check.sample(NodeClass)
-  expect(sample.next).not.toBeNull()
-  expect(sample.next?.value).toBe("xxx")
-  expect(sample.next?.next).toBe(sample)
+  class Bar extends Check.define({
+    bar: { v:0 },
+    foo: { v:Check.sample(Foo), required:false }
+  }) implements BarI {
+    get plusOne() { return this.bar + 1 }
+    add(x:number) { return this.bar + x }
+  }
+  Check.recurse(Foo, "bar", Check.sample(Bar))
+  const text = `{"foo":11,"bar":{"bar":22}}`
+  const foo = Check.parse(Foo, text)
+  expect(foo.bar?.add(3)).toBe(25)
+  expect(foo.bar?.plusOne).toBe(23)
 })
 
 test("types", () => {

@@ -446,6 +446,11 @@ export const sample = <R extends Base,T extends object>(cls:new(fields:T)=>R):R 
 export const recurse = <R extends Base,T extends object,K extends keyof R>(cls:new(fields:T)=>R, key:K, value:R[K]) => {
   const s = sample(cls)
   s[key] = value
+  const md = metadata(cls as never)
+  const field = md.fields[key as never]!
+  field.property.v = value as never
+  field.check = toFunction(key as never, field.property)
+  field.type = types.find(x => x.appliesTo(value))!
 }
 
 const run2 = <S extends Schema,T extends Out<S>>(cls:Class<S>, objectPrefix:string, json:InputJSON):Success<T>|Failure => {
